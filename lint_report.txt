@@ -1,0 +1,100 @@
+
+> tmp-app@0.1.0 lint
+> eslint
+
+
+F:\colab-task-manager\app\api\tasks\route.ts
+  17:7  warning  'positionSchema' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+F:\colab-task-manager\app\api\workspaces\route.ts
+  23:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  75:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:50  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+F:\colab-task-manager\app\app\[slug]\files\page.tsx
+  3:8   warning  'FileList' is defined but never used  @typescript-eslint/no-unused-vars
+  5:37  warning  'params' is defined but never used    @typescript-eslint/no-unused-vars
+
+F:\colab-task-manager\app\app\[slug]\page.tsx
+   12:8   warning  'Link' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+   23:12  warning  'recentActivity' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+   23:28  warning  'setRecentActivity' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+   23:58  error    Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+   29:8   warning  React Hook useEffect has a missing dependency: 'fetchDashboardData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   36:44  error    Unexpected any. Specify a different type                                                                               @typescript-eslint/no-explicit-any
+   66:24  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                        react/no-unescaped-entities
+   66:31  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                        react/no-unescaped-entities
+   93:81  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                        react/no-unescaped-entities
+   93:97  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                        react/no-unescaped-entities
+  100:77  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                        react/no-unescaped-entities
+  100:90  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                        react/no-unescaped-entities
+  107:73  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                        react/no-unescaped-entities
+  107:85  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                        react/no-unescaped-entities
+
+F:\colab-task-manager\app\app\[slug]\timesheet\page.tsx
+  4:10  warning  'Play' is defined but never used          @typescript-eslint/no-unused-vars
+  8:44  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  9:52  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+F:\colab-task-manager\app\app\page.tsx
+  15:11  warning  'router' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+F:\colab-task-manager\components\board\kanban-board.tsx
+   9:5  warning  'Paperclip' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+  10:5  warning  'Clock' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+  42:8  warning  React Hook useEffect has a missing dependency: 'fetchTasks'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+F:\colab-task-manager\components\chat\chat-box.tsx
+  28:52   error    Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  37:8    warning  React Hook useEffect has a missing dependency: 'fetchMessages'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  76:23   warning  'msg' is assigned a value but never used                                                                          @typescript-eslint/no-unused-vars
+  78:87   error    Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  97:100  error    Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+F:\colab-task-manager\components\files\file-list.tsx
+   4:34  warning  'Trash2' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+   4:51  warning  'Plus' is defined but never used                                                                               @typescript-eslint/no-unused-vars
+   5:10  warning  'useSession' is defined but never used                                                                         @typescript-eslint/no-unused-vars
+  23:8   warning  React Hook useEffect has a missing dependency: 'fetchFiles'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+F:\colab-task-manager\components\layout\sidebar.tsx
+   5:23  warning  'useRouter' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  10:5   warning  'MessageSquare' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  12:5   warning  'Settings' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  24:46  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  27:9   error    Error: Cannot access variable before it is declared
+
+`fetchProjects` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+F:\colab-task-manager\components\layout\sidebar.tsx:27:9
+  25 |
+  26 |     useEffect(() => {
+> 27 |         fetchProjects();
+     |         ^^^^^^^^^^^^^ `fetchProjects` accessed before it is declared
+  28 |     }, [workspaceSlug]);
+  29 |
+  30 |     const fetchProjects = async () => {
+
+F:\colab-task-manager\components\layout\sidebar.tsx:30:5
+  28 |     }, [workspaceSlug]);
+  29 |
+> 30 |     const fetchProjects = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         try {
+     | ^^^^^^^^^^^^^
+> 32 |             const res = await fetch(`/api/workspaces`); // We will need to get workspace ID first or use slug
+     ΓÇª
+     | ^^^^^^^^^^^^^
+> 46 |         }
+     | ^^^^^^^^^^^^^
+> 47 |     };
+     | ^^^^^^^ `fetchProjects` is declared here
+  48 |
+  49 |     const navItems = [
+  50 |         { name: "Dashboard", icon: LayoutDashboard, href: `/app/${workspaceSlug}` },  react-hooks/immutability
+  28:8   warning  React Hook useEffect has a missing dependency: 'fetchProjects'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+  32:19  warning  'res' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  37:51  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+
+Γ£û 44 problems (21 errors, 23 warnings)
+
