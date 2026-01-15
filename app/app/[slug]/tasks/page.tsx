@@ -9,7 +9,6 @@ import {
   Search,
   ArrowLeft,
   Loader2,
-  Clock,
   Filter,
 } from "lucide-react";
 import Link from "next/link";
@@ -105,7 +104,9 @@ export default function MyTasksPage({
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-medium text-mutedForeground">Loading your tasks...</p>
+        <p className="font-medium text-mutedForeground">
+          Loading your tasks...
+        </p>
       </div>
     );
 
@@ -116,19 +117,28 @@ export default function MyTasksPage({
           href={`/app/${slug}`}
           className="inline-flex items-center gap-2 text-xs font-black text-mutedForeground hover:text-primary transition-colors group"
         >
-          <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft
+            size={14}
+            className="group-hover:-translate-x-1 transition-transform"
+          />
           BACK TO DASHBOARD
         </Link>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-1">
-            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">My Tasks</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
+              My Tasks
+            </h1>
             <p className="text-mutedForeground text-lg font-medium">
-              You have {tasks.length} tasks assigned to you in <span className="text-foreground font-bold">{slug}</span>.
+              You have {tasks.length} tasks assigned to you in{" "}
+              <span className="text-foreground font-bold">{slug}</span>.
             </p>
           </div>
           <div className="flex gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground" size={18} />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground"
+                size={18}
+              />
               <Input
                 placeholder="Search tasks or projects..."
                 className="pl-10 h-11 rounded-xl bg-card border-border/50"
@@ -136,7 +146,10 @@ export default function MyTasksPage({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button variant="secondary" className="rounded-xl font-bold h-11 gap-2">
+            <Button
+              variant="secondary"
+              className="rounded-xl font-bold h-11 gap-2"
+            >
               <Filter size={18} />
               <span>Filters</span>
             </Button>
@@ -151,16 +164,29 @@ export default function MyTasksPage({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-muted/30 border-b border-border/50">
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Task Detail</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Project</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-center">Status</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-center">Priority</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">Due Date</th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Task Detail
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Project
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-center">
+                      Status
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-center">
+                      Priority
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">
+                      Due Date
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {filteredTasks.map((task) => (
-                    <tr key={task.id} className="group hover:bg-muted/10 transition-colors">
+                    <tr
+                      key={task.id}
+                      className="group hover:bg-muted/10 transition-colors"
+                    >
                       <td className="p-5">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
@@ -172,7 +198,10 @@ export default function MyTasksPage({
                         </div>
                       </td>
                       <td className="p-5">
-                        <Badge variant="secondary" className="bg-muted text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                        <Badge
+                          variant="secondary"
+                          className="bg-muted text-[10px] font-bold uppercase tracking-wider px-3 py-1"
+                        >
                           {task.project.name}
                         </Badge>
                       </td>
@@ -185,14 +214,18 @@ export default function MyTasksPage({
                         </Badge>
                       </td>
                       <td className="p-5 text-center">
-                        <span className={`text-xs font-black uppercase tracking-widest ${getPriorityColor(task.priority)}`}>
+                        <span
+                          className={`text-xs font-black uppercase tracking-widest ${getPriorityColor(task.priority)}`}
+                        >
                           {task.priority}
                         </span>
                       </td>
                       <td className="p-5 text-right text-sm font-bold text-mutedForeground/60">
                         <div className="flex items-center justify-end gap-2">
                           <CalendarIcon size={14} />
-                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No date"}
+                          {task.dueDate
+                            ? new Date(task.dueDate).toLocaleDateString()
+                            : "No date"}
                         </div>
                       </td>
                     </tr>
@@ -206,7 +239,9 @@ export default function MyTasksPage({
                 <AlertCircle size={48} />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-black text-foreground">No tasks found</h3>
+                <h3 className="text-2xl font-black text-foreground">
+                  No tasks found
+                </h3>
                 <p className="text-mutedForeground max-w-sm mx-auto">
                   {search
                     ? `No tasks match your search for "${search}".`

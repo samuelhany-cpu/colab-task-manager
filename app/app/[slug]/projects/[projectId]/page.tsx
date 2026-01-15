@@ -3,10 +3,22 @@
 import { use, useState, useEffect } from "react";
 import KanbanBoard from "@/components/board/kanban-board";
 import ProjectMembers from "@/components/project/project-members";
-import { Users, LayoutGrid, ArrowLeft, Loader2, Settings, Star } from "lucide-react";
+import {
+  Users,
+  LayoutGrid,
+  ArrowLeft,
+  Loader2,
+  Settings,
+  Star,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
+interface Project {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 export default function ProjectPage({
   params,
@@ -15,7 +27,7 @@ export default function ProjectPage({
 }) {
   const { slug, projectId } = use(params);
   const [activeTab, setActiveTab] = useState<"board" | "members">("board");
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +36,7 @@ export default function ProjectPage({
         const res = await fetch(`/api/projects?workspaceSlug=${slug}`);
         if (res.ok) {
           const projects = await res.json();
-          const p = projects.find((p: any) => p.id === projectId);
+          const p = projects.find((p: Project) => p.id === projectId);
           setProject(p);
         }
       } catch (e) {
@@ -54,7 +66,10 @@ export default function ProjectPage({
                 href={`/app/${slug}`}
                 className="inline-flex items-center gap-2 text-[10px] font-black text-mutedForeground hover:text-primary transition-colors group uppercase tracking-widest"
               >
-                <ArrowLeft size={12} className="group-hover:-translate-x-1 transition-transform" />
+                <ArrowLeft
+                  size={12}
+                  className="group-hover:-translate-x-1 transition-transform"
+                />
                 Back to Workspace
               </Link>
               <div className="flex items-center gap-4">
@@ -63,20 +78,27 @@ export default function ProjectPage({
                 </div>
                 <div>
                   <div className="flex items-center gap-3">
-                    <h1 className="text-3xl font-black tracking-tight text-foreground">{project?.name || "Project Details"}</h1>
+                    <h1 className="text-3xl font-black tracking-tight text-foreground">
+                      {project?.name || "Project Details"}
+                    </h1>
                     <button className="text-mutedForeground/40 hover:text-amber-400 transition-colors">
                       <Star size={20} />
                     </button>
                   </div>
                   <p className="text-sm font-medium text-mutedForeground">
-                    Workspace: <span className="text-foreground font-bold">{slug}</span>
+                    Workspace:{" "}
+                    <span className="text-foreground font-bold">{slug}</span>
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="flex gap-2">
-              <Button variant="secondary" size="icon" className="rounded-xl h-11 w-11 shadow-sm border-border/50">
+              <Button
+                variant="secondary"
+                size="icon"
+                className="rounded-xl h-11 w-11 shadow-sm border-border/50"
+              >
                 <Settings size={20} />
               </Button>
               <Button className="rounded-xl h-11 px-6 font-bold shadow-lg shadow-primary/20">
@@ -88,10 +110,11 @@ export default function ProjectPage({
           <div className="flex gap-8">
             <button
               onClick={() => setActiveTab("board")}
-              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${activeTab === "board"
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "board"
                   ? "text-primary"
                   : "text-mutedForeground hover:text-foreground"
-                }`}
+              }`}
             >
               <div className="flex items-center gap-2">
                 <LayoutGrid size={14} />
@@ -103,10 +126,11 @@ export default function ProjectPage({
             </button>
             <button
               onClick={() => setActiveTab("members")}
-              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${activeTab === "members"
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "members"
                   ? "text-primary"
                   : "text-mutedForeground hover:text-foreground"
-                }`}
+              }`}
             >
               <div className="flex items-center gap-2">
                 <Users size={14} />

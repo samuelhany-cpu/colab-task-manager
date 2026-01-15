@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserPlus, Mail, Lock, User, ArrowRight, Loader2, LayoutGrid, ShieldCheck } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  Loader2,
+  LayoutGrid,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -57,8 +65,15 @@ export default function RegisterPage() {
               <LayoutGrid size={32} />
             </div>
             <div className="space-y-3">
-              <h1 className="text-4xl font-black tracking-tight leading-tight">Build the future,<br /><span className="text-primary">one task</span> at a time.</h1>
-              <p className="text-mutedForeground font-medium">Join high-intensity teams using Colab to orchestrate their next big moves.</p>
+              <h1 className="text-4xl font-black tracking-tight leading-tight">
+                Build the future,
+                <br />
+                <span className="text-primary">one task</span> at a time.
+              </h1>
+              <p className="text-mutedForeground font-medium">
+                Join high-intensity teams using Colab to orchestrate their next
+                big moves.
+              </p>
             </div>
           </div>
 
@@ -66,9 +81,12 @@ export default function RegisterPage() {
             {[
               "Bank-grade security protocol",
               "Unlimited workspace access",
-              "24/7 Priority orchestration support"
+              "24/7 Priority orchestration support",
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-4 text-sm font-bold text-mutedForeground">
+              <div
+                key={i}
+                className="flex items-center gap-4 text-sm font-bold text-mutedForeground"
+              >
                 <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   <ShieldCheck size={14} />
                 </div>
@@ -80,15 +98,24 @@ export default function RegisterPage() {
           <div className="pt-8 border-t border-border/40">
             <p className="text-sm font-medium text-mutedForeground">
               Already have an account?{" "}
-              <Link href="/login" className="text-primary font-bold hover:underline">Sign In</Link>
+              <Link
+                href="/login"
+                className="text-primary font-bold hover:underline"
+              >
+                Sign In
+              </Link>
             </p>
           </div>
         </div>
 
         <div className="p-10 md:p-12 space-y-8">
           <div className="space-y-1">
-            <h2 className="text-2xl font-black tracking-tight">Create Account</h2>
-            <p className="text-mutedForeground text-sm font-medium">Step into your new command center.</p>
+            <h2 className="text-2xl font-black tracking-tight">
+              Create Account
+            </h2>
+            <p className="text-mutedForeground text-sm font-medium">
+              Step into your new command center.
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -100,9 +127,14 @@ export default function RegisterPage() {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Full Name</label>
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                  Full Name
+                </label>
                 <div className="relative group">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                  <User
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                    size={18}
+                  />
                   <Input
                     name="name"
                     required
@@ -113,9 +145,14 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Email Address</label>
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                  Email Address
+                </label>
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                  <Mail
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                    size={18}
+                  />
                   <Input
                     name="email"
                     type="email"
@@ -127,9 +164,14 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Password</label>
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                  Password
+                </label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                  <Lock
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                    size={18}
+                  />
                   <Input
                     name="password"
                     type="password"
@@ -142,17 +184,34 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-4">
-              <Button type="submit" disabled={loading} className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group">
-                {loading ? <Loader2 className="animate-spin" size={20} /> : (
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
+              >
+                {loading ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
                   <>
                     Create Account
-                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight
+                      size={20}
+                      className="group-hover:translate-x-1 transition-transform"
+                    />
                   </>
                 )}
               </Button>
 
               <p className="text-[10px] text-center text-mutedForeground leading-relaxed">
-                By registering, you agree to our <Link href="#" className="underline font-bold">Terms of Service</Link> and <Link href="#" className="underline font-bold">Privacy Policy</Link>.
+                By registering, you agree to our{" "}
+                <Link href="#" className="underline font-bold">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link href="#" className="underline font-bold">
+                  Privacy Policy
+                </Link>
+                .
               </p>
             </div>
           </form>

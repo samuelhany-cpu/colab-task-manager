@@ -4,7 +4,14 @@ import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { LogIn, Mail, Lock, ArrowRight, CheckCircle, Loader2, Sparkles, LayoutGrid } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  ArrowRight,
+  CheckCircle,
+  Loader2,
+  LayoutGrid,
+} from "lucide-react";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,11 +19,13 @@ import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-muted/30">
-        <Loader2 className="w-10 h-10 animate-spin text-primary opacity-20" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-muted/30">
+          <Loader2 className="w-10 h-10 animate-spin text-primary opacity-20" />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );
@@ -78,8 +87,12 @@ function LoginForm() {
             <LayoutGrid size={32} />
           </div>
           <div className="space-y-1">
-            <h1 className="text-3xl font-black tracking-tight text-foreground">Welcome Back</h1>
-            <p className="text-mutedForeground font-medium">Continue your high-intensity work.</p>
+            <h1 className="text-3xl font-black tracking-tight text-foreground">
+              Welcome Back
+            </h1>
+            <p className="text-mutedForeground font-medium">
+              Continue your high-intensity work.
+            </p>
           </div>
         </div>
 
@@ -99,9 +112,14 @@ function LoginForm() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Email Address</label>
+              <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                Email Address
+              </label>
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                <Mail
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                  size={18}
+                />
                 <Input
                   id="email"
                   name="email"
@@ -115,11 +133,21 @@ function LoginForm() {
 
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1">
-                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground">Password</label>
-                <Link href="#" className="text-xs font-bold text-primary hover:underline">Forgot?</Link>
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground">
+                  Password
+                </label>
+                <Link
+                  href="#"
+                  className="text-xs font-bold text-primary hover:underline"
+                >
+                  Forgot?
+                </Link>
               </div>
               <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                <Lock
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                  size={18}
+                />
                 <Input
                   id="password"
                   name="password"
@@ -132,11 +160,20 @@ function LoginForm() {
             </div>
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group">
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
               <>
                 Sign In
-                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                <ArrowRight
+                  size={20}
+                  className="group-hover:translate-x-1 transition-transform"
+                />
               </>
             )}
           </Button>
@@ -145,7 +182,10 @@ function LoginForm() {
         <div className="text-center">
           <p className="text-sm font-medium text-mutedForeground">
             New to Colab?{" "}
-            <Link href="/register" className="text-primary font-bold hover:underline">
+            <Link
+              href="/register"
+              className="text-primary font-bold hover:underline"
+            >
               Create an account
             </Link>
           </p>

@@ -62,7 +62,7 @@ export default function AllFilesPage({
             if (Array.isArray(projectFiles)) {
               allFiles = [
                 ...allFiles,
-                ...projectFiles.map((f: any) => ({
+                ...projectFiles.map((f: Omit<FileRecord, "project">) => ({
                   ...f,
                   project: { name: project.name },
                 })),
@@ -107,7 +107,9 @@ export default function AllFilesPage({
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-medium text-mutedForeground">Accessing workspace assets...</p>
+        <p className="font-medium text-mutedForeground">
+          Accessing workspace assets...
+        </p>
       </div>
     );
 
@@ -118,19 +120,28 @@ export default function AllFilesPage({
           href={`/app/${slug}`}
           className="inline-flex items-center gap-2 text-xs font-black text-mutedForeground hover:text-primary transition-colors group"
         >
-          <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft
+            size={14}
+            className="group-hover:-translate-x-1 transition-transform"
+          />
           BACK TO DASHBOARD
         </Link>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-1">
-            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Workspace Files</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
+              Workspace Files
+            </h1>
             <p className="text-mutedForeground text-lg font-medium">
-              Manage and storage for all assets in <span className="text-foreground font-bold">{slug}</span>.
+              Manage and storage for all assets in{" "}
+              <span className="text-foreground font-bold">{slug}</span>.
             </p>
           </div>
           <div className="flex gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground" size={18} />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground"
+                size={18}
+              />
               <Input
                 placeholder="Search filename or project..."
                 className="pl-10 h-11 rounded-xl bg-card border-border/50"
@@ -138,7 +149,10 @@ export default function AllFilesPage({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button variant="secondary" className="rounded-xl font-bold h-11 gap-2">
+            <Button
+              variant="secondary"
+              className="rounded-xl font-bold h-11 gap-2"
+            >
               <FolderOpen size={18} />
               <span>New Folder</span>
             </Button>
@@ -150,12 +164,23 @@ export default function AllFilesPage({
         {filteredFiles.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredFiles.map((file) => (
-              <Card key={file.id} className="p-6 group flex flex-col gap-6 relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-border/40 bg-card rounded-[2rem]">
+              <Card
+                key={file.id}
+                className="p-6 group flex flex-col gap-6 relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-border/40 bg-card rounded-[2rem]"
+              >
                 <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg"
+                  >
                     <Share2 size={14} />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg"
+                  >
                     <MoreVertical size={14} />
                   </Button>
                 </div>
@@ -166,11 +191,17 @@ export default function AllFilesPage({
 
                 <div className="space-y-4">
                   <div>
-                    <h3 className="font-bold text-foreground truncate group-hover:text-primary transition-colors" title={file.originalName || file.name}>
+                    <h3
+                      className="font-bold text-foreground truncate group-hover:text-primary transition-colors"
+                      title={file.originalName || file.name}
+                    >
                       {file.originalName || file.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="bg-primary/5 text-primary border-none text-[9px] font-black uppercase tracking-widest px-2">
+                      <Badge
+                        variant="secondary"
+                        className="bg-primary/5 text-primary border-none text-[9px] font-black uppercase tracking-widest px-2"
+                      >
                         {file.project.name}
                       </Badge>
                       <span className="text-[10px] text-mutedForeground font-bold uppercase tracking-tighter">
@@ -181,11 +212,23 @@ export default function AllFilesPage({
 
                   <div className="pt-4 border-t border-border/40 flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-[10px] text-mutedForeground/60 font-bold uppercase">Uploaded By</span>
-                      <span className="text-xs font-bold text-foreground/80">{file.uploadedBy.name}</span>
+                      <span className="text-[10px] text-mutedForeground/60 font-bold uppercase">
+                        Uploaded By
+                      </span>
+                      <span className="text-xs font-bold text-foreground/80">
+                        {file.uploadedBy.name}
+                      </span>
                     </div>
-                    <Button asChild variant="ghost" size="icon" className="h-9 w-9 bg-muted/40 hover:bg-primary hover:text-white rounded-xl transition-all shadow-sm">
-                      <a href={`/uploads/${file.key}`} download={file.originalName || file.name}>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 bg-muted/40 hover:bg-primary hover:text-white rounded-xl transition-all shadow-sm"
+                    >
+                      <a
+                        href={`/uploads/${file.key}`}
+                        download={file.originalName || file.name}
+                      >
                         <Download size={16} />
                       </a>
                     </Button>
@@ -200,7 +243,9 @@ export default function AllFilesPage({
               <File size={48} />
             </div>
             <div className="space-y-2">
-              <h3 className="text-2xl font-black text-foreground">No files found</h3>
+              <h3 className="text-2xl font-black text-foreground">
+                No files found
+              </h3>
               <p className="text-mutedForeground max-w-sm mx-auto font-medium">
                 {search
                   ? `Nothing matched your search for "${search}".`
