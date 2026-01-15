@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   if (projectId) {
     const files = await prisma.file.findMany({
       where: { projectId },
-      include: { uploader: { select: { name: true } } },
+      include: { uploadedBy: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -68,12 +68,12 @@ export async function POST(req: Request) {
 
     const fileRecord = await prisma.file.create({
       data: {
-        name: fileName,
+        originalName: fileName,
         key, // Serving as the unique identifier/filename
         mimeType: file.type,
         size: file.size,
         projectId,
-        uploaderId: (session.user as { id: string }).id,
+        uploadedById: (session.user as { id: string }).id,
       },
     });
 

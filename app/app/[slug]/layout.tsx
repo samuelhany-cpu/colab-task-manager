@@ -12,22 +12,11 @@ export default function WorkspaceLayout({
 }) {
   const { slug } = use(params);
   return (
-    <div className="layout-container">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar workspaceSlug={slug} />
-      <main className="main-content">{children}</main>
-
-      <style jsx>{`
-        .layout-container {
-          display: flex;
-          height: 100vh;
-          overflow: hidden;
-        }
-        .main-content {
-          flex: 1;
-          overflow-y: auto;
-          background: #0f172a;
-        }
-      `}</style>
+      <main className="flex-1 overflow-y-auto bg-muted/30">
+        {children}
+      </main>
     </div>
   );
 }

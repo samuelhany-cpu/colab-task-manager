@@ -153,110 +153,80 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="members-loading">
-        <Loader2
-          className="w-8 h-8 animate-spin"
-          style={{ color: "#60a5fa" }}
-        />
-        <style jsx>{`
-          .members-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 4rem 0;
-          }
-        `}</style>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-12 h-12 animate-spin text-primary opacity-20" />
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="members-container">
-        <div className="error-box">
-          <AlertCircle className="w-5 h-5" />
-          <span>{error}</span>
-        </div>
-        <style jsx>{`
-          .members-container {
-            padding: 2rem;
-          }
-          .error-box {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 1rem;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 0.75rem;
-            color: #f87171;
-          }
-        `}</style>
+  if (error) return (
+    <div className="p-8 max-w-7xl mx-auto">
+      <div className="flex items-center gap-3 p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl">
+        <AlertCircle size={20} />
+        <span className="font-bold">{error}</span>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="members-container">
-      <div className="members-header">
-        <h3 className="members-title">Team Members ({members.length})</h3>
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-bold">Team Members ({members.length})</h3>
         <button
           onClick={() => setShowAddModal(true)}
-          className="add-member-btn"
+          className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-soft hover:brightness-110 active:scale-95 transition-all"
         >
           <UserPlus size={16} />
           Add Member
         </button>
       </div>
 
-      <div className="members-list">
+      <div className="grid grid-cols-1 gap-4">
         {members.map((member) => (
-          <div key={member.id} className="member-card glass">
-            <div className="member-info">
+          <div key={member.id} className="flex items-center justify-between p-5 bg-card border border-border rounded-2xl shadow-soft transition-all hover:translate-y-[-2px] hover:shadow-lg">
+            <div className="flex items-center gap-4">
               {member.user.image ? (
                 <div
                   style={{
                     backgroundImage: `url(${member.user.image})`,
                     backgroundSize: "cover",
                   }}
-                  className="member-avatar"
+                  className="w-12 h-12 rounded-full border-2 border-border"
                 />
               ) : (
-                <div className="member-avatar-placeholder">
-                  <User2 size={20} />
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary border-2 border-primary/20">
+                  <User2 size={24} />
                 </div>
               )}
-              <div className="member-details">
-                <div className="member-name-row">
-                  <span className="member-name">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-foreground">
                     {member.user.name || "Unknown User"}
                   </span>
                   {member.role === "OWNER" && (
-                    <span className="owner-badge">
+                    <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-600 text-[10px] font-extrabold rounded-full uppercase tracking-wider border border-amber-500/20">
                       <Crown size={12} />
                       Owner
                     </span>
                   )}
                 </div>
-                <div className="member-email">
+                <div className="flex items-center gap-1.5 text-mutedForeground text-xs">
                   <Mail size={12} />
                   {member.user.email}
                 </div>
               </div>
             </div>
 
-            <div className="member-actions">
+            <div className="flex items-center gap-3">
               {member.role === "MEMBER" && (
                 <button
                   onClick={() => handleChangeRole(member.id, "OWNER")}
                   disabled={changingRoleId === member.id}
-                  className="action-btn promote-btn"
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500/5 text-amber-600 border border-amber-500/20 rounded-xl text-xs font-bold hover:bg-amber-500/10 transition-all disabled:opacity-50"
                   title="Make Owner"
                 >
                   {changingRoleId === member.id ? (
-                    <Loader2 size={14} className="spinner" />
+                    <Loader2 size={14} className="animate-spin" />
                   ) : (
                     <>
                       <Shield size={14} />
@@ -270,11 +240,11 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
                   <button
                     onClick={() => handleChangeRole(member.id, "MEMBER")}
                     disabled={changingRoleId === member.id}
-                    className="action-btn demote-btn"
+                    className="flex items-center gap-2 px-4 py-2 bg-muted text-mutedForeground border border-border rounded-xl text-xs font-bold hover:bg-muted/80 transition-all disabled:opacity-50"
                     title="Demote to Member"
                   >
                     {changingRoleId === member.id ? (
-                      <Loader2 size={14} className="spinner" />
+                      <Loader2 size={14} className="animate-spin" />
                     ) : (
                       "Demote"
                     )}
@@ -283,11 +253,11 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
               <button
                 onClick={() => handleRemoveMember(member.id)}
                 disabled={removingId === member.id}
-                className="action-btn remove-btn"
+                className="flex items-center gap-2 px-4 py-2 bg-destructive/5 text-destructive border border-destructive/20 rounded-xl text-xs font-bold hover:bg-destructive/10 transition-all disabled:opacity-50"
                 title="Remove Member"
               >
                 {removingId === member.id ? (
-                  <Loader2 size={14} className="spinner" />
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <>
                     <UserMinus size={14} />
@@ -300,72 +270,72 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
         ))}
 
         {members.length === 0 && (
-          <div className="empty-state">
-            <User2 size={48} style={{ opacity: 0.3 }} />
-            <p>No members yet. Add your first member to get started!</p>
+          <div className="flex flex-col items-center justify-center p-16 text-mutedForeground gap-4">
+            <User2 size={64} className="opacity-20" />
+            <p className="text-lg font-medium">No members yet. Add your first member to get started!</p>
           </div>
         )}
       </div>
 
       {/* Add Member Modal */}
       {showAddModal && (
-        <div className="modal-overlay">
-          <div className="modal-content glass">
-            <div className="modal-header">
-              <h3 className="modal-title">Add Team Member</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-[500px] bg-card border border-border p-8 rounded-[1.5rem] shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-2xl font-bold">Add Team Member</h3>
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setAddError("");
                   setNewMemberEmail("");
                 }}
-                className="close-btn"
+                className="p-2 text-mutedForeground hover:bg-muted rounded-xl transition-all"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleAddMember} className="modal-form">
-              <div className="form-group">
-                <label className="form-label">Email Address</label>
+            <form onSubmit={handleAddMember} className="flex flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-mutedForeground">Email Address</label>
                 <input
                   type="email"
                   value={newMemberEmail}
                   onChange={(e) => setNewMemberEmail(e.target.value)}
                   placeholder="user@example.com"
                   required
-                  className="form-input glass"
+                  className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-mutedForeground/50"
                 />
-                <p className="form-hint">
+                <p className="text-[10px] text-mutedForeground italic">
                   User must already have an account and be a workspace member
                 </p>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Role</label>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-mutedForeground">Role</label>
                 <select
                   value={newMemberRole}
                   onChange={(e) =>
                     setNewMemberRole(e.target.value as "MEMBER" | "OWNER")
                   }
-                  className="form-input glass"
+                  className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                 >
                   <option value="MEMBER">Member</option>
                   <option value="OWNER">Owner</option>
                 </select>
-                <p className="form-hint">
+                <p className="text-[10px] text-mutedForeground italic">
                   Owners can manage members and settings
                 </p>
               </div>
 
               {addError && (
-                <div className="error-box">
+                <div className="flex items-center gap-3 p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl text-sm">
                   <AlertCircle size={16} />
                   <span>{addError}</span>
                 </div>
               )}
 
-              <div className="modal-actions">
+              <div className="flex gap-4 pt-4">
                 <button
                   type="button"
                   onClick={() => {
@@ -373,14 +343,14 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
                     setAddError("");
                     setNewMemberEmail("");
                   }}
-                  className="cancel-btn"
+                  className="flex-1 py-3 bg-muted text-foreground border border-border rounded-xl font-bold hover:bg-muted/80 transition-all"
                 >
                   Cancel
                 </button>
-                <button type="submit" disabled={adding} className="submit-btn">
+                <button type="submit" disabled={adding} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-soft hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
                   {adding ? (
                     <>
-                      <Loader2 size={16} className="spinner" />
+                      <Loader2 size={16} className="animate-spin" />
                       Adding...
                     </>
                   ) : (
@@ -392,348 +362,6 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        .members-container {
-          padding: 2rem;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        .members-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 2rem;
-        }
-        .members-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: white;
-        }
-        .add-member-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #3b82f6, #60a5fa);
-          color: white;
-          border: none;
-          border-radius: 0.75rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        }
-        .add-member-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-        }
-        .members-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-        .member-card {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1.25rem;
-          border-radius: 1rem;
-          transition: all 0.3s ease;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .member-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        }
-        .member-info {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        .member-avatar {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          object-fit: cover;
-          border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .member-avatar-placeholder {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .member-details {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-        .member-name-row {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        .member-name {
-          font-weight: 600;
-          color: white;
-          font-size: 0.95rem;
-        }
-        .owner-badge {
-          display: flex;
-          align-items: center;
-          gap: 0.25rem;
-          padding: 0.25rem 0.75rem;
-          background: linear-gradient(135deg, #f59e0b, #fbbf24);
-          color: #78350f;
-          font-size: 0.75rem;
-          font-weight: 700;
-          border-radius: 9999px;
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-        }
-        .member-email {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          color: rgba(255, 255, 255, 0.6);
-          font-size: 0.875rem;
-        }
-        .member-actions {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .action-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.5rem 1rem;
-          border: none;
-          border-radius: 0.5rem;
-          font-size: 0.875rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .promote-btn {
-          background: rgba(245, 158, 11, 0.1);
-          color: #fbbf24;
-          border: 1px solid rgba(251, 191, 36, 0.3);
-        }
-        .promote-btn:hover:not(:disabled) {
-          background: rgba(245, 158, 11, 0.2);
-        }
-        .demote-btn {
-          background: rgba(148, 163, 184, 0.1);
-          color: #94a3b8;
-          border: 1px solid rgba(148, 163, 184, 0.3);
-        }
-        .demote-btn:hover:not(:disabled) {
-          background: rgba(148, 163, 184, 0.2);
-        }
-        .remove-btn {
-          background: rgba(239, 68, 68, 0.1);
-          color: #f87171;
-          border: 1px solid rgba(248, 113, 113, 0.3);
-        }
-        .remove-btn:hover:not(:disabled) {
-          background: rgba(239, 68, 68, 0.2);
-        }
-        .spinner {
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 4rem 2rem;
-          color: rgba(255, 255, 255, 0.5);
-          gap: 1rem;
-        }
-        .empty-state p {
-          font-size: 1rem;
-          text-align: center;
-        }
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 1rem;
-          animation: fadeIn 0.2s ease-out;
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        .modal-content {
-          max-width: 500px;
-          width: 100%;
-          padding: 2rem;
-          border-radius: 1.5rem;
-          animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        @keyframes slideUp {
-          from {
-            transform: translateY(20px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 1.5rem;
-        }
-        .modal-title {
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: white;
-        }
-        .close-btn {
-          padding: 0.5rem;
-          background: transparent;
-          border: none;
-          color: rgba(255, 255, 255, 0.6);
-          cursor: pointer;
-          border-radius: 0.5rem;
-          transition: all 0.2s ease;
-        }
-        .close-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        .modal-form {
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
-        }
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-        .form-label {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: rgba(255, 255, 255, 0.9);
-        }
-        .form-input {
-          padding: 0.75rem 1rem;
-          border-radius: 0.75rem;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(255, 255, 255, 0.05);
-          color: white;
-          font-size: 0.875rem;
-          outline: none;
-          transition: all 0.2s ease;
-        }
-        .form-input:focus {
-          border-color: #60a5fa;
-          box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-        }
-        .form-input::placeholder {
-          color: rgba(255, 255, 255, 0.4);
-        }
-        .form-input option {
-          background: #1e293b;
-          color: white;
-        }
-        .form-hint {
-          font-size: 0.75rem;
-          color: rgba(255, 255, 255, 0.5);
-        }
-        .error-box {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.875rem;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          border-radius: 0.75rem;
-          color: #f87171;
-          font-size: 0.875rem;
-        }
-        .modal-actions {
-          display: flex;
-          gap: 0.75rem;
-          margin-top: 0.5rem;
-        }
-        .cancel-btn {
-          flex: 1;
-          padding: 0.75rem 1.5rem;
-          background: rgba(255, 255, 255, 0.05);
-          color: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 0.75rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .cancel-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-        .submit-btn {
-          flex: 1;
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, #3b82f6, #60a5fa);
-          color: white;
-          border: none;
-          border-radius: 0.75rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-        }
-        .submit-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-        }
-        .submit-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .glass {
-          background: rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-      `}</style>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -93,6 +94,15 @@ export async function POST(req: Request) {
         creatorId: (session.user as { id: string }).id,
         position,
       },
+      include: {
+        project: {
+          include: {
+            workspace: {
+              select: { slug: true },
+            },
+          },
+        },
+      },
     });
 
     // Create activity
@@ -103,6 +113,22 @@ export async function POST(req: Request) {
         userId: (session.user as { id: string }).id,
       },
     });
+
+    // Send notification if task has assignee
+    if (data.assigneeId && data.assigneeId !== (session.user as { id: string }).id) {
+      try {
+        await notifyTaskAssigned(
+          data.assigneeId,
+          task.title,
+          task.id,
+          task.projectId,
+          task.project.workspace.slug
+        );
+      } catch (notificationError) {
+        console.error("Failed to send notification:", notificationError);
+        // Don't fail the task creation if notification fails
+      }
+    }
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, CheckCheck, Trash2, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { getSocket } from "@/lib/socket-client";
+import { Bell, BellOff, Check, Trash2, Loader2 } from "lucide-react";
+import { cn } from "@/lib/cn";
 
 interface Notification {
   id: string;
@@ -15,21 +17,20 @@ interface Notification {
 }
 
 export default function NotificationDropdown() {
-  const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { data: session } = useSession();
 
-  const fetchNotifications = useCallback(async () => {
+  // Fetch notifications
+  const fetchNotifications = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (filter !== "all") params.append("type", filter);
-
-      const res = await fetch(`/api/notifications?${params}`);
+      const res = await fetch(`/api/notifications?filter=${filter}&limit=50`);
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications);
@@ -40,78 +41,98 @@ export default function NotificationDropdown() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  };
 
   useEffect(() => {
     fetchNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
-    // Real-time notifications
+  // Setup Socket.io for real-time notifications
+  useEffect(() => {
+    if (!session?.user?.email) return;
+
     const socket = getSocket();
-    socket.on("notification", (notification: Notification) => {
+
+    // Join user's notification room
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.user?.id) {
+          socket.emit("join-user", data.user.id);
+        }
+      });
+
+    // Listen for new notifications
+    const handleNewNotification = (notification: Notification) => {
       setNotifications((prev) => [notification, ...prev]);
-      if (!notification.read) {
-        setUnreadCount((prev) => prev + 1);
+      setUnreadCount((prev) => prev + 1);
+
+      // Show browser notification if supported
+      if (Notification.permission === "granted") {
+        new Notification("New Notification", {
+          body: notification.content,
+          icon: "/favicon.ico",
+        });
       }
-    });
+    };
+
+    socket.on("new-notification", handleNewNotification);
+
+    // Request notification permission
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
 
     return () => {
-      socket.off("notification");
+      socket.off("new-notification", handleNewNotification);
     };
-  }, [fetchNotifications]);
+  }, [session]);
 
+  // Close dropdown when clicking outside
   useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
+        !dropdownRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("click", handleClickOutside);
-    }, 10);
-
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
     return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchNotifications();
-    }
-  }, [filter, isOpen, fetchNotifications]);
-
-  const markAsRead = async (id: string) => {
+  // Mark notification as read
+  const markAsRead = async (id: string, read: boolean = true) => {
     try {
       const res = await fetch(`/api/notifications/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ read: true }),
+        body: JSON.stringify({ read }),
       });
 
       if (res.ok) {
         setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+          prev.map((n) => (n.id === id ? { ...n, read } : n))
         );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+        setUnreadCount((prev) => (read ? prev - 1 : prev + 1));
       }
     } catch (error) {
-      console.error("Failed to mark as read:", error);
+      console.error("Failed to mark notification:", error);
     }
   };
 
+  // Mark all as read
   const markAllAsRead = async () => {
     try {
-      const res = await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications/read-all", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "read-all" }),
       });
 
       if (res.ok) {
@@ -123,8 +144,8 @@ export default function NotificationDropdown() {
     }
   };
 
-  const deleteNotification = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Delete notification
+  const deleteNotification = async (id: string) => {
     try {
       const res = await fetch(`/api/notifications/${id}`, {
         method: "DELETE",
@@ -134,7 +155,7 @@ export default function NotificationDropdown() {
         const notification = notifications.find((n) => n.id === id);
         setNotifications((prev) => prev.filter((n) => n.id !== id));
         if (notification && !notification.read) {
-          setUnreadCount((prev) => Math.max(0, prev - 1));
+          setUnreadCount((prev) => prev - 1);
         }
       }
     } catch (error) {
@@ -142,34 +163,18 @@ export default function NotificationDropdown() {
     }
   };
 
-  const clearAll = async () => {
-    if (!confirm("Clear all notifications?")) return;
-
-    try {
-      const res = await fetch("/api/notifications?all=true", {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        setNotifications([]);
-        setUnreadCount(0);
-      }
-    } catch (error) {
-      console.error("Failed to clear notifications:", error);
-    }
-  };
-
+  // Handle notification click
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.read) {
       markAsRead(notification.id);
     }
-
     if (notification.link) {
-      setIsOpen(false);
       router.push(notification.link);
+      setIsOpen(false);
     }
   };
 
+  // Get icon based on notification type
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "TASK_ASSIGNED":
@@ -179,133 +184,144 @@ export default function NotificationDropdown() {
       case "MESSAGE_RECEIVED":
         return "✉️";
       case "PROJECT_INVITE":
-        return "👥";
+        return "🎯";
       default:
         return "🔔";
     }
   };
 
-  const getTimeAgo = (date: string) => {
-    const seconds = Math.floor(
-      (new Date().getTime() - new Date(date).getTime()) / 1000,
-    );
+  // Format relative time
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
 
-    if (seconds < 60) return "Just now";
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return new Date(date).toLocaleDateString();
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
   };
 
   return (
-    <div className="notification-container" ref={dropdownRef}>
+    <div className="relative" ref={dropdownRef}>
       <button
-        className="notification-bell"
+        className="relative p-2.5 rounded-xl text-mutedForeground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all flex items-center justify-center group"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Notifications"
       >
-        <Bell size={20} />
+        <Bell size={20} className="group-hover:scale-110 transition-transform" />
         {unreadCount > 0 && (
-          <span className="notification-badge">
-            {unreadCount > 99 ? "99+" : unreadCount}
+          <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground border-2 border-background">
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="notification-dropdown">
-          <div className="notification-header">
-            <h3>Notifications</h3>
-            <div className="notification-actions">
+        <div className="absolute right-0 top-full mt-3 w-[400px] max-h-[600px] bg-card border border-border rounded-2xl shadow-2xl z-[1000] flex flex-col overflow-hidden animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between p-5 border-b border-border bg-card">
+            <h3 className="text-lg font-bold">Notifications</h3>
+            {unreadCount > 0 && (
               <button
+                className="text-xs font-bold text-primary hover:text-primary/80 transition-all p-1.5 hover:bg-primary/5 rounded-lg"
                 onClick={markAllAsRead}
-                title="Mark all as read"
-                disabled={unreadCount === 0}
               >
-                <CheckCheck size={16} />
+                Mark all as read
               </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 p-3 border-b border-border bg-muted/30 overflow-x-auto no-scrollbar">
+            {["all", "unread", "TASK_ASSIGNED", "MESSAGE_RECEIVED"].map((t) => (
               <button
-                onClick={clearAll}
-                title="Clear all"
-                disabled={notifications.length === 0}
+                key={t}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all",
+                  filter === t
+                    ? "bg-primary text-primary-foreground shadow-soft"
+                    : "text-mutedForeground hover:bg-muted hover:text-foreground"
+                )}
+                onClick={() => setFilter(t)}
               >
-                <Trash2 size={16} />
+                {t === "all" ? "All" : t === "unread" ? "Unread" : t === "TASK_ASSIGNED" ? "Tasks" : "Messages"}
               </button>
-            </div>
+            ))}
           </div>
 
-          <div className="notification-filters">
-            <button
-              className={filter === "all" ? "active" : ""}
-              onClick={() => setFilter("all")}
-            >
-              All
-            </button>
-            <button
-              className={filter === "TASK_ASSIGNED" ? "active" : ""}
-              onClick={() => setFilter("TASK_ASSIGNED")}
-            >
-              Tasks
-            </button>
-            <button
-              className={filter === "COMMENT_MENTION" ? "active" : ""}
-              onClick={() => setFilter("COMMENT_MENTION")}
-            >
-              Mentions
-            </button>
-            <button
-              className={filter === "MESSAGE_RECEIVED" ? "active" : ""}
-              onClick={() => setFilter("MESSAGE_RECEIVED")}
-            >
-              Messages
-            </button>
-          </div>
-
-          <div className="notification-list">
+          <div className="flex-1 overflow-y-auto max-h-[400px] divide-y divide-border">
             {loading ? (
-              <div className="notification-loading">Loading...</div>
+              <div className="p-12 text-center text-mutedForeground flex flex-col items-center gap-3">
+                <Loader2 className="animate-spin opacity-20" size={32} />
+                <span className="text-sm font-medium">Crunching notifications...</span>
+              </div>
             ) : notifications.length === 0 ? (
-              <div className="notification-empty">
-                <Bell size={48} style={{ opacity: 0.3 }} />
-                <p>No notifications yet</p>
+              <div className="p-16 text-center text-mutedForeground flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  <BellOff size={32} className="opacity-20" />
+                </div>
+                <p className="text-sm font-medium text-mutedForeground/60">No notifications found</p>
               </div>
             ) : (
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`notification-item ${!notification.read ? "unread" : ""}`}
-                  onClick={() => handleNotificationClick(notification)}
+                  className={cn(
+                    "group flex items-start gap-4 p-4 transition-all hover:bg-muted/50",
+                    !notification.read && "bg-primary/[0.02]"
+                  )}
                 >
-                  <div className="notification-icon">
-                    {getNotificationIcon(notification.type)}
+                  <div
+                    className="flex-1 flex gap-4 cursor-pointer"
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-muted border border-border flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+                      {getNotificationIcon(notification.type)}
+                    </div>
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <p className={cn(
+                        "text-sm leading-snug break-words",
+                        !notification.read ? "font-bold text-foreground" : "text-mutedForeground"
+                      )}>
+                        {notification.content}
+                      </p>
+                      <span className="text-[10px] font-medium text-mutedForeground opacity-60 uppercase tracking-wider">
+                        {formatTime(notification.createdAt)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="notification-content">
-                    <p>{notification.content}</p>
-                    <span className="notification-time">
-                      {getTimeAgo(notification.createdAt)}
-                    </span>
-                  </div>
-                  <div className="notification-item-actions">
+
+                  <div className="flex flex-col gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!notification.read && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           markAsRead(notification.id);
                         }}
+                        className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20"
                         title="Mark as read"
-                        className="mark-read-btn"
                       >
                         <Check size={14} />
                       </button>
                     )}
                     <button
-                      onClick={(e) => deleteNotification(notification.id, e)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteNotification(notification.id);
+                      }}
+                      className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-all border border-transparent hover:border-destructive/20"
                       title="Delete"
-                      className="delete-btn"
                     >
-                      <X size={14} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
+
+                  {!notification.read && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(59,130,246,0.6)] group-hover:opacity-0 transition-opacity" />
+                  )}
                 </div>
               ))
             )}
@@ -313,219 +329,6 @@ export default function NotificationDropdown() {
         </div>
       )}
 
-      <style jsx>{`
-        .notification-container {
-          position: relative;
-        }
-        .notification-bell {
-          position: relative;
-          padding: 0.5rem;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 0.5rem;
-          color: rgba(255, 255, 255, 0.8);
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .notification-bell:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        .notification-badge {
-          position: absolute;
-          top: -4px;
-          right: -4px;
-          background: linear-gradient(135deg, #ef4444, #dc2626);
-          color: white;
-          font-size: 0.625rem;
-          font-weight: 700;
-          padding: 0.125rem 0.375rem;
-          border-radius: 9999px;
-          min-width: 18px;
-          text-align: center;
-          box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-        }
-        .notification-dropdown {
-          position: absolute;
-          top: calc(100% + 0.5rem);
-          right: 0;
-          width: 400px;
-          max-height: 600px;
-          background: rgba(30, 41, 59, 0.98);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 1rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-          backdrop-filter: blur(20px);
-          z-index: 1000;
-          display: flex;
-          flex-direction: column;
-          animation: slideDown 0.2s ease-out;
-        }
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .notification-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1rem 1.25rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .notification-header h3 {
-          font-size: 1rem;
-          font-weight: 700;
-          color: white;
-          margin: 0;
-        }
-        .notification-actions {
-          display: flex;
-          gap: 0.5rem;
-        }
-        .notification-actions button {
-          padding: 0.375rem;
-          background: transparent;
-          border: none;
-          color: rgba(255, 255, 255, 0.6);
-          cursor: pointer;
-          border-radius: 0.375rem;
-          transition: all 0.2s ease;
-        }
-        .notification-actions button:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        .notification-actions button:disabled {
-          opacity: 0.3;
-          cursor: not-allowed;
-        }
-        .notification-filters {
-          display: flex;
-          gap: 0.5rem;
-          padding: 0.75rem 1.25rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          overflow-x: auto;
-        }
-        .notification-filters button {
-          padding: 0.375rem 0.75rem;
-          background: transparent;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.6);
-          font-size: 0.75rem;
-          font-weight: 600;
-          border-radius: 0.5rem;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          white-space: nowrap;
-        }
-        .notification-filters button:hover {
-          background: rgba(255, 255, 255, 0.05);
-          color: rgba(255, 255, 255, 0.9);
-        }
-        .notification-filters button.active {
-          background: linear-gradient(135deg, #3b82f6, #60a5fa);
-          border-color: transparent;
-          color: white;
-        }
-        .notification-list {
-          flex: 1;
-          overflow-y: auto;
-          max-height: 450px;
-        }
-        .notification-loading,
-        .notification-empty {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 3rem 1rem;
-          color: rgba(255, 255, 255, 0.5);
-          gap: 1rem;
-        }
-        .notification-empty p {
-          margin: 0;
-          font-size: 0.875rem;
-        }
-        .notification-item {
-          display: flex;
-          gap: 0.75rem;
-          padding: 1rem 1.25rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          cursor: pointer;
-          transition: all 0.2s ease;
-          position: relative;
-        }
-        .notification-item:hover {
-          background: rgba(255, 255, 255, 0.05);
-        }
-        .notification-item.unread {
-          background: rgba(59, 130, 246, 0.05);
-        }
-        .notification-item.unread::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 3px;
-          background: linear-gradient(135deg, #3b82f6, #60a5fa);
-        }
-        .notification-icon {
-          font-size: 1.5rem;
-          flex-shrink: 0;
-        }
-        .notification-content {
-          flex: 1;
-          min-width: 0;
-        }
-        .notification-content p {
-          margin: 0 0 0.25rem;
-          color: white;
-          font-size: 0.875rem;
-          line-height: 1.4;
-        }
-        .notification-time {
-          font-size: 0.75rem;
-          color: rgba(255, 255, 255, 0.5);
-        }
-        .notification-item-actions {
-          display: flex;
-          gap: 0.25rem;
-          opacity: 0;
-          transition: opacity 0.2s ease;
-        }
-        .notification-item:hover .notification-item-actions {
-          opacity: 1;
-        }
-        .notification-item-actions button {
-          padding: 0.25rem;
-          background: transparent;
-          border: none;
-          color: rgba(255, 255, 255, 0.5);
-          cursor: pointer;
-          border-radius: 0.25rem;
-          transition: all 0.2s ease;
-        }
-        .notification-item-actions button:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        .notification-item-actions .mark-read-btn:hover {
-          color: #60a5fa;
-        }
-        .notification-item-actions .delete-btn:hover {
-          color: #ef4444;
-        }
-      `}</style>
     </div>
   );
 }

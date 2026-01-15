@@ -11,7 +11,13 @@ import {
   ChevronRight,
   Calendar,
   LucideIcon,
+  Loader2,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface Stats {
   projects: number;
@@ -20,9 +26,21 @@ interface Stats {
   hours: number;
 }
 
+interface ActivityItem {
+  id: string;
+  user: string;
+  action: string;
+  target: string;
+  project: string;
+  time: string;
+  color: string;
+}
+
 interface ActionItem {
   label: string;
   icon: LucideIcon;
+  href: string;
+  description: string;
 }
 
 export default function WorkspaceDashboard({
@@ -37,28 +55,20 @@ export default function WorkspaceDashboard({
     members: 0,
     hours: 0,
   });
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const wsRes = await fetch("/api/workspaces");
-        const workspaces = await wsRes.json();
-        const ws = workspaces.find(
-          (w: { slug: string; projects?: unknown[]; members?: unknown[] }) =>
-            w.slug === slug,
-        );
-
-        if (ws) {
-          setStats({
-            projects: ws.projects?.length || 0,
-            tasks: 12, // Mock for now
-            members: ws.members?.length || 1,
-            hours: 45.5, // Mock for now
-          });
+        const res = await fetch(`/api/workspaces/${slug}/dashboard`);
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data.stats);
+          setActivities(data.recentActivity);
         }
       } catch (e: unknown) {
-        console.error(e);
+        console.error("Dashboard fetch error:", e);
       } finally {
         setLoading(false);
       }
@@ -73,511 +83,294 @@ export default function WorkspaceDashboard({
       value: stats.projects,
       icon: Briefcase,
       color: "#8b5cf6",
-      trend: "+2 this month",
+      trend: "Total current",
+      href: `/app/${slug}/projects`,
     },
     {
       label: "Open Tasks",
       value: stats.tasks,
       icon: CheckCircle2,
       color: "#10b981",
-      trend: "5 urgent",
+      trend: "Across projects",
+      href: `/app/${slug}/tasks`,
     },
     {
       label: "Team Members",
       value: stats.members,
       icon: Users,
       color: "#3b82f6",
-      trend: "3 active now",
+      trend: "In workspace",
+      href: `/app/${slug}/settings/members`,
     },
     {
       label: "Hours Tracked",
       value: stats.hours,
       icon: Clock,
       color: "#f59e0b",
-      trend: "12.5 hrs today",
+      trend: "Last 30 days",
+      href: `/app/${slug}/timesheet`,
+    },
+  ];
+
+  const quickActions: ActionItem[] = [
+    {
+      label: "Create New Project",
+      icon: Briefcase,
+      href: `/app/${slug}/projects/new`,
+      description: "Start a new team collaboration"
+    },
+    {
+      label: "Invite Team Members",
+      icon: Users,
+      href: `/app/${slug}/settings/members`,
+      description: "Grow your workspace team"
+    },
+    {
+      label: "Generate API Key",
+      icon: Zap,
+      href: `/app/${slug}/settings/developer`,
+      description: "Access workspace via API"
     },
   ];
 
   if (loading)
     return (
-      <div className="loading-state">
-        <div className="spinner gradient-bg" />
-        <p>Loading your workspace...</p>
-        <style jsx>{`
-          .loading-state {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-          }
-          .spinner {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-          }
-          @keyframes pulse {
-            0% {
-              transform: scale(0.8);
-              opacity: 0.5;
-            }
-            50% {
-              transform: scale(1.1);
-              opacity: 1;
-            }
-            100% {
-              transform: scale(0.8);
-              opacity: 0.5;
-            }
-          }
-        `}</style>
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30 text-mutedForeground text-center p-4">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+        <div className="space-y-1">
+          <p className="font-bold text-lg text-foreground">Syncing your workspace...</p>
+          <p className="text-sm opacity-70">Fetching real-time data from database</p>
+        </div>
       </div>
     );
 
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <div className="header-info">
-          <h1 className="gradient-text">Workspace Overview</h1>
-          <p>
-            Welcome back! You have <span className="highlight">5 tasks</span>{" "}
-            due today.
+    <div className="p-8 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-border/50">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+              {slug}
+            </Badge>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground">
+            Workspace Overview
+          </h1>
+          <p className="text-mutedForeground text-lg">
+            Welcome back! You have{" "}
+            <span className="text-foreground font-bold">{stats.tasks} tasks</span> currently in progress.
           </p>
         </div>
-        <div className="header-actions">
-          <button className="glass-btn glass">
-            <Calendar size={18} />
-            <span>Weekly Report</span>
-          </button>
-          <button className="primary-btn">
-            <Zap size={18} />
-            <span>Quick Start</span>
-          </button>
+        <div className="flex gap-3 w-full md:w-auto">
+          <Button asChild variant="secondary" className="flex-1 md:flex-none gap-2 px-6 h-12 rounded-xl shadow-sm border-border/50 hover:bg-muted font-bold">
+            <Link href={`/app/${slug}/timesheet`}>
+              <Calendar size={18} />
+              <span>Weekly Report</span>
+            </Link>
+          </Button>
+          <Button asChild className="flex-1 md:flex-none gap-2 px-6 h-12 rounded-xl shadow-lg shadow-primary/20 font-bold">
+            <Link href={`/app/${slug}/projects/new`}>
+              <Zap size={18} />
+              <span>Quick Start</span>
+            </Link>
+          </Button>
         </div>
       </header>
 
-      <div className="stats-grid">
-        {statCards.map((stat, idx) => (
-          <div
-            key={stat.label}
-            className="stat-card glass glass-hover"
-            style={{ "--delay": `${idx * 0.1}s` } as React.CSSProperties}
-          >
-            <div className="stat-header">
-              <div
-                className="stat-icon"
-                style={{ background: `${stat.color}15`, color: stat.color }}
-              >
-                <stat.icon size={22} />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statCards.map((stat) => (
+          <Link key={stat.label} href={stat.href} className="block group">
+            <Card className="p-7 h-full transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 group-hover:border-primary/30 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0 translate-x-4">
+                <ArrowRight className="text-primary" size={16} />
               </div>
-              <span className="stat-trend">{stat.trend}</span>
-            </div>
-            <div className="stat-body">
-              <div className="stat-value">{stat.value}</div>
-              <div className="stat-label">{stat.label}</div>
-            </div>
-            <div className="stat-progress-bg">
-              <div
-                className="stat-progress-bar"
-                style={{ background: stat.color, width: "40%" }}
-              />
-            </div>
-          </div>
+
+              <div className="flex justify-between items-start mb-8">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-sm"
+                  style={{
+                    background: `${stat.color}10`,
+                    color: stat.color,
+                  }}
+                >
+                  <stat.icon size={28} />
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-bold uppercase tracking-widest opacity-60 bg-muted/30 border-transparent group-hover:bg-primary/5 group-hover:text-primary transition-colors"
+                >
+                  {stat.trend}
+                </Badge>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-4xl font-black tracking-tight group-hover:text-primary transition-colors">
+                  {stat.value}
+                </div>
+                <div className="text-xs font-bold text-mutedForeground uppercase tracking-[0.15em] opacity-70 group-hover:opacity-100 transition-opacity">
+                  {stat.label}
+                </div>
+              </div>
+
+              <div className="mt-8 h-1 w-full bg-muted/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-out delay-300"
+                  style={{ background: stat.color, width: stats.tasks > 0 ? "45%" : "5%" }}
+                />
+              </div>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      <div className="dashboard-layout">
-        <div className="main-col">
-          <section className="activity-section glass">
-            <div className="section-header">
-              <div className="header-title">
-                <ActivityIcon size={20} className="header-icon" />
-                <h3>Recent Activity</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* Activity Section */}
+        <div className="lg:col-span-8">
+          <Card className="flex flex-col h-full overflow-hidden border-border/40 shadow-sm">
+            <div className="p-8 pb-6 flex justify-between items-center bg-muted/5 border-b border-border/50">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 flex items-center justify-center bg-primary/10 rounded-xl">
+                  <ActivityIcon size={20} className="text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Recent Activity</h3>
+                  <p className="text-xs text-mutedForeground font-medium">Live updates from your team</p>
+                </div>
               </div>
-              <button className="text-btn">View All</button>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="text-primary font-bold hover:bg-primary/10 px-4 rounded-lg transition-all"
+              >
+                <Link href={`/app/${slug}/activity`}>View All</Link>
+              </Button>
             </div>
-            <div className="activity-list">
-              {[
-                {
-                  user: "You",
-                  action: "created task",
-                  target: "Setup R2 Bucket",
-                  project: "Dev Ops",
-                  time: "2h ago",
-                  color: "#8b5cf6",
-                },
-                {
-                  user: "Sarah",
-                  action: "commented on",
-                  target: "Fix Auth Bug",
-                  project: "Project Alpha",
-                  time: "4h ago",
-                  color: "#10b981",
-                },
-                {
-                  user: "John",
-                  action: "completed",
-                  target: "Update Logo",
-                  project: "Branding",
-                  time: "Yesterday",
-                  color: "#3b82f6",
-                },
-                {
-                  user: "System",
-                  action: "automated report",
-                  target: "Weekly Summary",
-                  project: "General",
-                  time: "1 day ago",
-                  color: "#94a3b8",
-                },
-              ].map((item, i) => (
-                <div key={i} className="activity-item">
-                  <div className="activity-line" />
-                  <div
-                    className="user-dot"
-                    style={{ background: item.color }}
-                  />
-                  <div className="activity-content">
-                    <p className="activity-text">
-                      <span className="user-name">{item.user}</span>{" "}
-                      {item.action}
-                      <span className="target-name">
-                        {" "}
-                        &quot;{item.target}&quot;
+
+            <div className="p-8 space-y-10 relative bg-card">
+              {activities.length > 0 ? (
+                activities.map((item, i) => (
+                  <div key={item.id} className="flex gap-6 relative group">
+                    {i !== activities.length - 1 && (
+                      <div className="absolute left-[7px] top-6 h-[calc(100%+40px)] w-[2px] bg-muted/40" />
+                    )}
+                    <div className="relative z-10 mt-1">
+                      <div
+                        className="w-4 h-4 rounded-full border-4 border-background shadow-md transition-all duration-300 group-hover:scale-125 group-hover:shadow-primary/20"
+                        style={{ backgroundColor: item.color }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div className="text-[15px] leading-relaxed text-mutedForeground group-hover:text-foreground transition-colors">
+                        <span className="font-bold text-foreground">
+                          {item.user}
+                        </span>{" "}
+                        {item.action}
+                        <span className="text-foreground font-semibold italic mx-1.5">
+                          &quot;{item.target}&quot;
+                        </span>
+                        in
+                        <Badge
+                          variant="outline"
+                          className="ml-2 font-bold text-[9px] uppercase tracking-tighter px-2 py-0 transition-all border-current/20 group-hover:border-current"
+                          style={{
+                            color: item.color,
+                            backgroundColor: `${item.color}05`,
+                          }}
+                        >
+                          {item.project}
+                        </Badge>
+                      </div>
+                      <span className="text-[11px] font-bold text-mutedForeground/40 uppercase tracking-widest flex items-center gap-1.5 group-hover:text-mutedForeground transition-colors">
+                        <Clock size={10} />
+                        {item.time}
                       </span>
-                      in{" "}
-                      <span
-                        className="project-tag"
-                        style={{ color: item.color }}
-                      >
-                        {item.project}
-                      </span>
-                    </p>
-                    <span className="activity-time">{item.time}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-20 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <ActivityIcon size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-foreground">No activity yet</h4>
+                    <p className="text-sm">Start working in projects to see updates here.</p>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
-          </section>
+          </Card>
         </div>
 
-        <div className="side-col">
-          <section className="quick-actions glass">
-            <div className="section-header">
-              <h3>Quick Actions</h3>
+        {/* Sidebar Actions */}
+        <div className="lg:col-span-4 space-y-8">
+          <Card className="p-8 border-border/40 shadow-sm bg-card">
+            <div className="mb-8">
+              <h3 className="text-xl font-bold">Quick Actions</h3>
+              <p className="text-xs text-mutedForeground mt-1 font-medium">Common workspace tasks</p>
             </div>
-            <nav className="action-nav">
-              {(
-                [
-                  { label: "Create New Project", icon: Briefcase },
-                  { label: "Invite Team Members", icon: Users },
-                  { label: "Generate API Key", icon: Zap },
-                ] as ActionItem[]
-              ).map((action, i) => (
-                <button key={i} className="action-link glass-hover">
-                  <div className="action-icon glass">
-                    <action.icon size={18} />
-                  </div>
-                  <span>{action.label}</span>
-                  <ChevronRight size={16} className="chevron" />
-                </button>
-              ))}
-            </nav>
-          </section>
 
-          <section className="upgrade-card gradient-bg">
-            <h4>Go Premium</h4>
-            <p>Unlock unlimited projects and advanced analytics.</p>
-            <button className="white-btn">Upgrade Now</button>
-          </section>
+            <div className="flex flex-col gap-3">
+              {quickActions.map((action, i) => (
+                <Button
+                  key={i}
+                  asChild
+                  variant="ghost"
+                  className="justify-start gap-4 p-4 h-auto group text-left rounded-2xl transition-all border border-transparent hover:border-primary/10 hover:bg-primary/5 hover:translate-x-1"
+                >
+                  <Link href={action.href}>
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-mutedForeground group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
+                      <action.icon size={22} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-[15px] group-hover:text-primary transition-colors">
+                        {action.label}
+                      </div>
+                      <div className="text-[11px] text-mutedForeground font-medium opacity-70 group-hover:opacity-100 italic">
+                        {action.description}
+                      </div>
+                    </div>
+                    <ChevronRight
+                      size={16}
+                      className="text-mutedForeground/30 group-hover:text-primary group-hover:translate-x-1 transition-all"
+                    />
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          </Card>
+
+          <div className="p-10 rounded-[2.5rem] bg-gradient-to-br from-[#2563eb] via-[#3b82f6] to-[#6366f1] text-primary-foreground shadow-2xl shadow-blue-500/30 relative overflow-hidden group border border-white/10">
+            {/* Decorative background circle */}
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl transition-all duration-1000 group-hover:scale-150 group-hover:bg-white/20" />
+            <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-sky-400/20 rounded-full blur-2xl transition-all duration-1000 group-hover:scale-125" />
+
+            <div className="relative z-10 space-y-6">
+              <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-inner">
+                <Zap size={28} className="fill-white" />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-2xl font-black tracking-tight">
+                  Go Premium
+                </h4>
+                <p className="text-sm font-medium opacity-80 leading-relaxed">
+                  Unlock unlimited projects, team-wide analytics, and priority 24/7 support.
+                </p>
+              </div>
+
+              <Button
+                asChild
+                className="w-full bg-white text-blue-600 hover:bg-slate-50 font-black border-none shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all h-14 rounded-2xl text-base"
+              >
+                <Link href={`/app/${slug}/billing`}>Upgrade Now</Link>
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .dashboard-container {
-          padding: 3rem;
-          max-width: 1400px;
-          margin: 0 auto;
-          animation: fadeIn 0.8s ease-out;
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .dashboard-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          margin-bottom: 3rem;
-        }
-        .header-info h1 {
-          font-size: 2.75rem;
-          margin-bottom: 0.5rem;
-          letter-spacing: -0.04em;
-        }
-        .header-info p {
-          color: var(--muted-foreground);
-          font-size: 1.125rem;
-        }
-        .highlight {
-          color: var(--foreground);
-          font-weight: 600;
-        }
-        .header-actions {
-          display: flex;
-          gap: 1rem;
-        }
-        .glass-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem 1.25rem;
-          border-radius: 0.75rem;
-          color: white;
-          font-weight: 500;
-        }
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 3rem;
-        }
-        .stat-card {
-          padding: 1.75rem;
-          border-radius: 1.25rem;
-          position: relative;
-          overflow: hidden;
-          animation: slideUp 0.6s ease-out backwards;
-          animation-delay: var(--delay);
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .stat-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 1.5rem;
-        }
-        .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .stat-trend {
-          font-size: 0.7rem;
-          font-weight: 600;
-          color: var(--muted-foreground);
-          padding: 0.25rem 0.6rem;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 100px;
-        }
-        .stat-value {
-          font-size: 2.25rem;
-          font-weight: 800;
-          margin-bottom: 0.25rem;
-          letter-spacing: -0.02em;
-        }
-        .stat-label {
-          font-size: 0.875rem;
-          color: var(--muted-foreground);
-          font-weight: 500;
-        }
-        .stat-progress-bg {
-          height: 4px;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 2px;
-          margin-top: 1.5rem;
-        }
-        .stat-progress-bar {
-          height: 100%;
-          border-radius: 2px;
-        }
-        .dashboard-layout {
-          display: grid;
-          grid-template-columns: 1fr 340px;
-          gap: 2rem;
-        }
-        .activity-section,
-        .quick-actions {
-          padding: 2rem;
-          border-radius: 1.5rem;
-        }
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 2rem;
-        }
-        .header-title {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        .header-icon {
-          color: var(--primary);
-        }
-        .section-header h3 {
-          font-size: 1.125rem;
-          font-weight: 700;
-        }
-        .text-btn {
-          color: var(--primary);
-          font-size: 0.875rem;
-          font-weight: 600;
-        }
-        .activity-list {
-          display: flex;
-          flex-direction: column;
-        }
-        .activity-item {
-          display: flex;
-          gap: 1.5rem;
-          padding-bottom: 2rem;
-          position: relative;
-        }
-        .activity-line {
-          position: absolute;
-          left: 5px;
-          top: 10px;
-          bottom: 0;
-          width: 1px;
-          background: var(--border);
-        }
-        .activity-item:last-child .activity-line {
-          display: none;
-        }
-        .user-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          border: 3px solid #1e293b;
-          position: relative;
-          z-index: 1;
-          margin-top: 4px;
-        }
-        .user-name {
-          font-weight: 700;
-          color: var(--foreground);
-        }
-        .target-name {
-          color: var(--foreground);
-          font-weight: 500;
-        }
-        .project-tag {
-          font-size: 0.75rem;
-          font-weight: 700;
-          padding: 0.1rem 0.5rem;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid currentColor;
-          border-radius: 4px;
-          margin-left: 0.25rem;
-        }
-        .activity-time {
-          font-size: 0.75rem;
-          color: var(--muted-foreground);
-          margin-top: 0.25rem;
-          display: block;
-        }
-        .action-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-        .action-link {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1rem;
-          border-radius: 1rem;
-          text-align: left;
-        }
-        .action-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--muted-foreground);
-        }
-        .action-link:hover .action-icon {
-          color: var(--primary);
-          background: rgba(139, 92, 246, 0.1);
-        }
-        .action-link span {
-          flex: 1;
-          font-weight: 500;
-          font-size: 0.9375rem;
-        }
-        .chevron {
-          color: var(--muted-foreground);
-          transition: transform 0.2s;
-        }
-        .action-link:hover .chevron {
-          transform: translateX(3px);
-          color: white;
-        }
-        .upgrade-card {
-          margin-top: 2rem;
-          padding: 2rem;
-          border-radius: 1.5rem;
-          color: white;
-          position: relative;
-          overflow: hidden;
-        }
-        .upgrade-card h4 {
-          font-size: 1.25rem;
-          font-weight: 800;
-          margin-bottom: 0.5rem;
-        }
-        .upgrade-card p {
-          font-size: 0.875rem;
-          opacity: 0.9;
-          margin-bottom: 1.5rem;
-          line-height: 1.5;
-        }
-        .white-btn {
-          background: white;
-          color: var(--primary);
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.75rem;
-          font-weight: 700;
-          width: 100%;
-        }
-        @media (max-width: 1024px) {
-          .dashboard-layout {
-            grid-template-columns: 1fr;
-          }
-          .side-col {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            align-items: start;
-          }
-          .upgrade-card {
-            margin-top: 0;
-          }
-        }
-      `}</style>
     </div>
   );
 }

@@ -9,11 +9,21 @@ import {
   Image as ImageIcon,
   Film,
   MoreVertical,
+  ArrowLeft,
+  Loader2,
+  FolderOpen,
+  Share2,
 } from "lucide-react";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface FileRecord {
   id: string;
   name: string;
+  originalName: string;
   key: string;
   mimeType: string;
   size: number;
@@ -42,19 +52,17 @@ export default function AllFilesPage({
         );
 
         if (workspace) {
-          // Fetch across all projects in workspace
           const pRes = await fetch(`/api/projects?workspaceId=${workspace.id}`);
           const projects = await pRes.json();
 
           let allFiles: FileRecord[] = [];
           for (const project of projects) {
-            // Use existing file list logic if available or fetch from custom endpoint
             const fRes = await fetch(`/api/files?projectId=${project.id}`);
             const projectFiles = await fRes.json();
             if (Array.isArray(projectFiles)) {
               allFiles = [
                 ...allFiles,
-                ...projectFiles.map((f) => ({
+                ...projectFiles.map((f: any) => ({
                   ...f,
                   project: { name: project.name },
                 })),
@@ -64,7 +72,7 @@ export default function AllFilesPage({
           setFiles(allFiles);
         }
       } catch (e: unknown) {
-        console.error(e);
+        console.error("Files fetch error:", e);
       } finally {
         setLoading(false);
       }
@@ -75,10 +83,10 @@ export default function AllFilesPage({
 
   const getFileIcon = (mime: string) => {
     if (mime.startsWith("image/"))
-      return <ImageIcon size={20} className="icon-image" />;
+      return <ImageIcon size={24} className="text-purple-500" />;
     if (mime.startsWith("video/"))
-      return <Film size={20} className="icon-video" />;
-    return <FileText size={20} className="icon-file" />;
+      return <Film size={24} className="text-amber-500" />;
+    return <FileText size={24} className="text-blue-500" />;
   };
 
   const formatSize = (bytes: number) => {
@@ -91,197 +99,117 @@ export default function AllFilesPage({
 
   const filteredFiles = files.filter(
     (f) =>
-      f.name.toLowerCase().includes(search.toLowerCase()) ||
+      (f.originalName || f.name).toLowerCase().includes(search.toLowerCase()) ||
       f.project.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  if (loading) return <div className="p-8">Loading workspace files...</div>;
+  if (loading)
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-medium text-mutedForeground">Accessing workspace assets...</p>
+      </div>
+    );
 
   return (
-    <div className="files-container">
-      <header className="page-header">
-        <div>
-          <h1 className="gradient-text">Workspace Files</h1>
-          <p className="subtitle">
-            Management and storage for all assets in {slug}.
-          </p>
-        </div>
-        <div className="header-actions">
-          <div className="search-bar glass">
-            <Search size={18} />
-            <input
-              type="text"
-              placeholder="Filter files..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+    <div className="min-h-screen bg-muted/30 p-8 space-y-8 animate-in fade-in duration-700">
+      <header className="max-w-7xl mx-auto space-y-4">
+        <Link
+          href={`/app/${slug}`}
+          className="inline-flex items-center gap-2 text-xs font-black text-mutedForeground hover:text-primary transition-colors group"
+        >
+          <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+          BACK TO DASHBOARD
+        </Link>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Workspace Files</h1>
+            <p className="text-mutedForeground text-lg font-medium">
+              Manage and storage for all assets in <span className="text-foreground font-bold">{slug}</span>.
+            </p>
+          </div>
+          <div className="flex gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground" size={18} />
+              <Input
+                placeholder="Search filename or project..."
+                className="pl-10 h-11 rounded-xl bg-card border-border/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button variant="secondary" className="rounded-xl font-bold h-11 gap-2">
+              <FolderOpen size={18} />
+              <span>New Folder</span>
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="files-grid">
-        {filteredFiles.map((file) => (
-          <div key={file.id} className="file-card glass glass-hover">
-            <div className="file-preview">{getFileIcon(file.mimeType)}</div>
-            <div className="file-info">
-              <h3 className="file-name" title={file.name}>
-                {file.name}
-              </h3>
-              <p className="file-meta">
-                {file.project.name} • {formatSize(file.size)}
-              </p>
-              <div className="file-details">
-                <span className="uploader">By {file.uploadedBy.name}</span>
-                <span className="date">
-                  {new Date(file.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-            <div className="file-actions">
-              <a
-                href={`/uploads/${file.key}`}
-                download={file.name}
-                className="action-icon-btn"
-              >
-                <Download size={16} />
-              </a>
-              <button className="action-icon-btn">
-                <MoreVertical size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
-        {filteredFiles.length === 0 && (
-          <div className="empty-files glass">
-            <File size={40} className="muted-icon" />
-            <p>No files found in this workspace.</p>
-          </div>
-        )}
-      </div>
+      <main className="max-w-7xl mx-auto">
+        {filteredFiles.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredFiles.map((file) => (
+              <Card key={file.id} className="p-6 group flex flex-col gap-6 relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-border/40 bg-card rounded-[2rem]">
+                <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg">
+                    <Share2 size={14} />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg">
+                    <MoreVertical size={14} />
+                  </Button>
+                </div>
 
-      <style jsx>{`
-        .files-container {
-          padding: 3rem;
-          max-width: 1400px;
-          margin: 0 auto;
-        }
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          margin-bottom: 3rem;
-        }
-        h1 {
-          font-size: 2.5rem;
-          font-weight: 800;
-          margin-bottom: 0.5rem;
-        }
-        .subtitle {
-          color: var(--muted-foreground);
-        }
-        .search-bar {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.6rem 1rem;
-          border-radius: 0.75rem;
-          width: 300px;
-        }
-        .search-bar input {
-          background: none;
-          border: none;
-          color: white;
-          width: 100%;
-          outline: none;
-        }
-        .files-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 1.5rem;
-        }
-        .file-card {
-          padding: 1.5rem;
-          border-radius: 1.25rem;
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          position: relative;
-        }
-        .file-preview {
-          height: 120px;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 0.75rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .icon-image {
-          color: #8b5cf6;
-        }
-        .icon-video {
-          color: #f59e0b;
-        }
-        .icon-file {
-          color: #3b82f6;
-        }
-        .file-name {
-          font-size: 1rem;
-          font-weight: 600;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .file-meta {
-          font-size: 0.75rem;
-          color: var(--muted-foreground);
-          margin-bottom: 0.5rem;
-        }
-        .file-details {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.7rem;
-          color: var(--muted-foreground);
-          border-top: 1px solid var(--border);
-          padding-top: 0.75rem;
-        }
-        .file-actions {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
-          display: flex;
-          gap: 0.25rem;
-          opacity: 0;
-          transition: opacity 0.2s;
-        }
-        .file-card:hover .file-actions {
-          opacity: 1;
-        }
-        .action-icon-btn {
-          padding: 0.4rem;
-          border-radius: 6px;
-          background: rgba(0, 0, 0, 0.5);
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .action-icon-btn:hover {
-          background: var(--primary);
-        }
-        .empty-files {
-          grid-column: 1 / -1;
-          padding: 5rem;
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1rem;
-          color: var(--muted-foreground);
-        }
-        .muted-icon {
-          opacity: 0.2;
-        }
-      `}</style>
+                <div className="w-full h-32 rounded-2xl bg-muted/40 flex items-center justify-center group-hover:bg-primary/5 transition-colors">
+                  {getFileIcon(file.mimeType)}
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-bold text-foreground truncate group-hover:text-primary transition-colors" title={file.originalName || file.name}>
+                      {file.originalName || file.name}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="secondary" className="bg-primary/5 text-primary border-none text-[9px] font-black uppercase tracking-widest px-2">
+                        {file.project.name}
+                      </Badge>
+                      <span className="text-[10px] text-mutedForeground font-bold uppercase tracking-tighter">
+                        {formatSize(file.size)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-border/40 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-mutedForeground/60 font-bold uppercase">Uploaded By</span>
+                      <span className="text-xs font-bold text-foreground/80">{file.uploadedBy.name}</span>
+                    </div>
+                    <Button asChild variant="ghost" size="icon" className="h-9 w-9 bg-muted/40 hover:bg-primary hover:text-white rounded-xl transition-all shadow-sm">
+                      <a href={`/uploads/${file.key}`} download={file.originalName || file.name}>
+                        <Download size={16} />
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="p-24 border-border/40 bg-card rounded-[3rem] border-dashed flex flex-col items-center justify-center text-center space-y-6 opacity-40">
+            <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center text-mutedForeground">
+              <File size={48} />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-foreground">No files found</h3>
+              <p className="text-mutedForeground max-w-sm mx-auto font-medium">
+                {search
+                  ? `Nothing matched your search for "${search}".`
+                  : "Upload assets within individual projects to see them collected here."}
+              </p>
+            </div>
+          </Card>
+        )}
+      </main>
     </div>
   );
 }

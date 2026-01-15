@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
@@ -52,7 +54,7 @@ export async function PATCH(
     }
 
     // If status is changing, update position to end of new column
-    const updateData: typeof data & { position?: number } = { ...data };
+    const updateData: Prisma.TaskUpdateInput = { ...data } as Prisma.TaskUpdateInput;
     if (data.status && data.status !== task.status) {
       const lastTask = await prisma.task.findFirst({
         where: { projectId: task.projectId, status: data.status },
@@ -79,6 +81,10 @@ export async function PATCH(
       updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
     }
 
+    // Check if assignee changed
+    const assigneeChanged = data.assigneeId !== undefined && data.assigneeId !== task.assigneeId;
+    const oldAssigneeId = task.assigneeId;
+
     const updatedTask = await prisma.task.update({
       where: { id },
       data: updateData,
@@ -86,11 +92,34 @@ export async function PATCH(
         assignee: {
           select: { id: true, name: true, email: true, image: true },
         },
+        project: {
+          include: {
+            workspace: {
+              select: { slug: true },
+            },
+          },
+        },
         _count: {
           select: { comments: true },
         },
       },
     });
+
+    // Send notification if assignee changed
+    if (assigneeChanged && data.assigneeId && data.assigneeId !== oldAssigneeId) {
+      try {
+        await notifyTaskAssigned(
+          data.assigneeId,
+          updatedTask.title,
+          updatedTask.id,
+          updatedTask.projectId,
+          updatedTask.project.workspace.slug
+        );
+      } catch (notificationError) {
+        console.error("Failed to send notification:", notificationError);
+        // Don't fail the task update if notification fails
+      }
+    }
 
     return NextResponse.json(updatedTask);
   } catch (error) {

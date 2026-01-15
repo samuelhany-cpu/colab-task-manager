@@ -3,13 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  UserPlus,
-  Mail,
-  Lock,
-  User as UserIcon,
-  ArrowRight,
-} from "lucide-react";
+import { UserPlus, Mail, Lock, User, ArrowRight, Loader2, LayoutGrid, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -22,12 +19,12 @@ export default function RegisterPage() {
     setError(null);
 
     const formData = new FormData(e.currentTarget);
-    const name = formData.get("name");
-    const email = formData.get("email");
-    const password = formData.get("password");
+    const name = formData.get("name") as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
     try {
-      const res = await fetch("/api/register", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
@@ -48,206 +45,125 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card glass">
-        <div className="auth-header">
-          <div className="auth-logo">
-            <UserPlus size={40} className="primary-color" />
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6 relative overflow-hidden text-foreground">
+      {/* Decorative Orbs */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-[100px] translate-x-1/2 translate-y-1/2" />
+
+      <Card className="w-full max-w-4xl p-0 border-border/40 bg-card rounded-[2.5rem] shadow-2xl relative z-10 grid grid-cols-1 md:grid-cols-2 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        <div className="p-10 md:p-12 flex flex-col justify-between space-y-12 bg-muted/20 border-r border-border/40">
+          <div className="space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white shadow-xl shadow-primary/20">
+              <LayoutGrid size={32} />
+            </div>
+            <div className="space-y-3">
+              <h1 className="text-4xl font-black tracking-tight leading-tight">Build the future,<br /><span className="text-primary">one task</span> at a time.</h1>
+              <p className="text-mutedForeground font-medium">Join high-intensity teams using Colab to orchestrate their next big moves.</p>
+            </div>
           </div>
-          <h1 className="gradient-text">Create Account</h1>
-          <p className="auth-subtitle">Join Colab Task Manager today</p>
+
+          <div className="space-y-6">
+            {[
+              "Bank-grade security protocol",
+              "Unlimited workspace access",
+              "24/7 Priority orchestration support"
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-4 text-sm font-bold text-mutedForeground">
+                <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                  <ShieldCheck size={14} />
+                </div>
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-8 border-t border-border/40">
+            <p className="text-sm font-medium text-mutedForeground">
+              Already have an account?{" "}
+              <Link href="/login" className="text-primary font-bold hover:underline">Sign In</Link>
+            </p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          {error && <div className="auth-error">{error}</div>}
-
-          <div className="form-group">
-            <label htmlFor="name">Full Name</label>
-            <div className="input-with-icon">
-              <UserIcon size={18} />
-              <input
-                id="name"
-                name="name"
-                type="text"
-                required
-                placeholder="John Doe"
-              />
-            </div>
+        <div className="p-10 md:p-12 space-y-8">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black tracking-tight">Create Account</h2>
+            <p className="text-mutedForeground text-sm font-medium">Step into your new command center.</p>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="email">Email Address</label>
-            <div className="input-with-icon">
-              <Mail size={18} />
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="john@example.com"
-              />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl text-xs font-bold animate-in shake duration-300">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Full Name</label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                  <Input
+                    name="name"
+                    required
+                    placeholder="John Doe"
+                    className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Email Address</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                  <Input
+                    name="email"
+                    type="email"
+                    required
+                    placeholder="john@example.com"
+                    className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors" size={18} />
+                  <Input
+                    name="password"
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="input-with-icon">
-              <Lock size={18} />
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                placeholder="••••••••"
-              />
+            <div className="space-y-4">
+              <Button type="submit" disabled={loading} className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group">
+                {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                  <>
+                    Create Account
+                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </Button>
+
+              <p className="text-[10px] text-center text-mutedForeground leading-relaxed">
+                By registering, you agree to our <Link href="#" className="underline font-bold">Terms of Service</Link> and <Link href="#" className="underline font-bold">Privacy Policy</Link>.
+              </p>
             </div>
-          </div>
-
-          <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? "Creating account..." : "Sign Up"}
-            {!loading && <ArrowRight size={18} />}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <p>
-            Already have an account?{" "}
-            <Link href="/login" className="auth-link">
-              Sign In
-            </Link>
-          </p>
+          </form>
         </div>
+      </Card>
+
+      <div className="absolute bottom-8 text-center w-full">
+        <p className="text-[10px] font-black uppercase tracking-widest text-mutedForeground opacity-40">
+          &copy; 2026 COLAB TECHNOLOGIES
+        </p>
       </div>
-
-      <style jsx>{`
-        .auth-container {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          background: radial-gradient(
-            circle at top left,
-            #1e1b4b 0%,
-            #0f172a 100%
-          );
-        }
-        .auth-card {
-          width: 100%;
-          max-width: 440px;
-          padding: 2.5rem;
-          border-radius: var(--radius);
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-        .auth-header {
-          text-align: center;
-          margin-bottom: 2rem;
-        }
-        .auth-logo {
-          margin-bottom: 1rem;
-          display: flex;
-          justify-content: center;
-        }
-        .primary-color {
-          color: var(--primary);
-        }
-        h1 {
-          font-size: 2rem;
-          font-weight: 700;
-          margin-bottom: 0.5rem;
-        }
-        .auth-subtitle {
-          color: var(--muted-foreground);
-          font-size: 0.875rem;
-        }
-        .auth-form {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-        }
-        .auth-error {
-          padding: 0.75rem;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid var(--destructive);
-          color: #fca5a5;
-          border-radius: 0.5rem;
-          font-size: 0.875rem;
-        }
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-        label {
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: var(--foreground);
-        }
-        .input-with-icon {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-        .input-with-icon :global(svg) {
-          position: absolute;
-          left: 1rem;
-          color: var(--muted-foreground);
-        }
-        input {
-          width: 100%;
-          padding: 0.75rem 1rem 0.75rem 2.75rem;
-          background: rgba(15, 23, 42, 0.5);
-          border: 1px solid var(--border);
-          border-radius: 0.5rem;
-          color: white;
-          transition:
-            border-color 0.2s,
-            box-shadow 0.2s;
-        }
-        input:focus {
-          border-color: var(--primary);
-          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
-        }
-        .auth-button {
-          margin-top: 0.5rem;
-          padding: 0.75rem;
-          background: var(--primary);
-          color: white;
-          border-radius: 0.5rem;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          transition:
-            opacity 0.2s,
-            transform 0.1s;
-        }
-        .auth-button:hover:not(:disabled) {
-          opacity: 0.9;
-          transform: translateY(-1px);
-        }
-        .auth-button:active:not(:disabled) {
-          transform: translateY(0);
-        }
-        .auth-button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .auth-footer {
-          margin-top: 2rem;
-          text-align: center;
-          font-size: 0.875rem;
-          color: var(--muted-foreground);
-        }
-        .auth-link {
-          color: var(--primary);
-          font-weight: 600;
-        }
-        .auth-link:hover {
-          text-decoration: underline;
-        }
-      `}</style>
     </div>
   );
 }

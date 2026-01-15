@@ -9,8 +9,14 @@ import {
   ChevronRight,
   Trash2,
   Play,
+  ArrowLeft,
+  Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface TimeEntry {
   id: string;
@@ -29,7 +35,7 @@ export default function TimesheetPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  use(params);
+  const { slug } = use(params);
   const { data: session } = useSession();
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,11 +48,10 @@ export default function TimesheetPage({
         const res = await fetch("/api/time");
         if (res.ok) {
           const data = await res.json();
-          // API returns { entries, activeTimer }
           setEntries(data.entries || []);
         }
       } catch (e: unknown) {
-        console.error(e);
+        console.error("Timesheet fetch error:", e);
       } finally {
         setLoading(false);
       }
@@ -74,20 +79,7 @@ export default function TimesheetPage({
       }
     } catch (error) {
       console.error("Failed to delete entry:", error);
-      alert("Failed to delete time entry");
     }
-  };
-
-  const handleAddEntry = () => {
-    setShowAddModal(true);
-  };
-
-  const handlePreviousWeek = () => {
-    setCurrentWeekOffset(currentWeekOffset - 1);
-  };
-
-  const handleNextWeek = () => {
-    setCurrentWeekOffset(currentWeekOffset + 1);
   };
 
   const getWeekDateRange = () => {
@@ -117,338 +109,181 @@ export default function TimesheetPage({
 
   const totalTime = entries.reduce((acc, curr) => acc + curr.duration, 0);
 
-  if (loading) return <div className="p-8">Loading timesheet...</div>;
+  if (loading)
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-medium text-mutedForeground">Loading your timesheet...</p>
+      </div>
+    );
 
   return (
-    <div className="timesheet-container">
-      <header className="page-header">
-        <div>
-          <h1 className="gradient-text">Timesheet</h1>
-          <p className="subtitle">
-            Track your productivity and billable hours.
-          </p>
-        </div>
-        <div className="summary-card glass">
-          <div className="summary-item">
-            <span className="summary-label">Total Week</span>
-            <span className="summary-value">{formatDuration(totalTime)}</span>
-          </div>
-          <div className="summary-divider" />
-          <div className="summary-item">
-            <span className="summary-label">Today</span>
-            <span className="summary-value">
-              {formatDuration(getTodayTotal())}
-            </span>
+    <div className="min-h-screen bg-muted/30 p-8 space-y-8 animate-in fade-in duration-700">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 max-w-7xl mx-auto">
+        <div className="space-y-4">
+          <Link
+            href={`/app/${slug}`}
+            className="inline-flex items-center gap-2 text-xs font-black text-mutedForeground hover:text-primary transition-colors group"
+          >
+            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+            BACK TO DASHBOARD
+          </Link>
+          <div className="space-y-1">
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Timesheet</h1>
+            <p className="text-mutedForeground text-lg">
+              Track your productivity and billable hours.
+            </p>
           </div>
         </div>
+
+        <Card className="flex items-center p-2 rounded-2xl bg-card shadow-sm border-border/40">
+          <div className="px-6 py-3 border-r border-border/50">
+            <span className="block text-[10px] font-bold text-mutedForeground uppercase tracking-widest mb-1">Total Week</span>
+            <span className="text-2xl font-black text-primary leading-none">{formatDuration(totalTime)}</span>
+          </div>
+          <div className="px-6 py-3">
+            <span className="block text-[10px] font-bold text-mutedForeground uppercase tracking-widest mb-1">Today</span>
+            <span className="text-2xl font-black text-foreground leading-none">{formatDuration(getTodayTotal())}</span>
+          </div>
+        </Card>
       </header>
 
-      <div className="timesheet-controls glass">
-        <div className="date-nav">
-          <button className="nav-btn" onClick={handlePreviousWeek}>
-            <ChevronLeft size={20} />
-          </button>
-          <div className="current-date">
-            <CalendarIcon size={18} />
-            <span>{getWeekDateRange()}</span>
+      <main className="max-w-7xl mx-auto space-y-6">
+        {/* Controls */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-card p-4 rounded-2xl border border-border/40 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-muted"
+              onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
+            >
+              <ChevronLeft size={20} />
+            </Button>
+            <div className="flex items-center gap-2.5 px-4 font-bold text-foreground">
+              <CalendarIcon size={18} className="text-primary" />
+              <span className="whitespace-nowrap">{getWeekDateRange()}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-muted"
+              onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
+            >
+              <ChevronRight size={20} />
+            </Button>
           </div>
-          <button className="nav-btn" onClick={handleNextWeek}>
-            <ChevronRight size={20} />
-          </button>
+          <Button
+            className="w-full sm:w-auto rounded-xl font-bold bg-primary shadow-lg shadow-primary/20 gap-2 px-6 h-11"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={18} />
+            <span>Add Entry</span>
+          </Button>
         </div>
-        <button className="primary-btn" onClick={handleAddEntry}>
-          <Plus size={18} />
-          <span>Add Entry</span>
-        </button>
-      </div>
 
-      <div className="entries-list glass">
-        {entries.length > 0 ? (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Task / Project</th>
-                  <th>Note</th>
-                  <th>Date</th>
-                  <th>Duration</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry) => (
-                  <tr key={entry.id} className="entry-row">
-                    <td>
-                      <div className="task-cell">
-                        <span className="task-title">{entry.task.title}</span>
-                        <span className="project-tag">
-                          {entry.task.project.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="note-text">
-                        {entry.note || "No notes"}
-                      </span>
-                    </td>
-                    <td>{new Date(entry.startTime).toLocaleDateString()}</td>
-                    <td>
-                      <span className="duration-tag">
-                        {formatDuration(entry.duration)}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="actions-cell">
-                        <button
-                          className="icon-btn"
-                          title="Continue Timer"
-                          onClick={() =>
-                            alert("Timer feature - integrate with task timer")
-                          }
-                        >
-                          <Play size={16} />
-                        </button>
-                        <button
-                          className="icon-btn delete"
-                          title="Delete Entry"
-                          onClick={() => handleDeleteEntry(entry.id)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+        {/* List */}
+        <Card className="rounded-2xl overflow-hidden border-border/40 shadow-sm bg-card">
+          {entries.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border/50">
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Task / Project</th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Note</th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Date</th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Duration</th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">
-            <Clock size={48} className="muted-icon" />
-            <h3>No time entries yet</h3>
-            <p>Start a timer on a task to track your work.</p>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {entries.map((entry) => (
+                    <tr key={entry.id} className="group hover:bg-muted/10 transition-colors">
+                      <td className="p-5">
+                        <div className="space-y-1">
+                          <div className="font-bold text-foreground group-hover:text-primary transition-colors">{entry.task.title}</div>
+                          <Badge variant="secondary" className="bg-primary/5 text-primary border-none text-[9px] font-bold uppercase tracking-wider px-2">
+                            {entry.task.project.name}
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="p-5">
+                        <span className="text-sm text-mutedForeground font-medium italic">
+                          {entry.note || "—"}
+                        </span>
+                      </td>
+                      <td className="p-5">
+                        <span className="text-sm font-bold text-foreground opacity-70">
+                          {new Date(entry.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      </td>
+                      <td className="p-5">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-lg font-mono font-bold text-sm">
+                          <Clock size={12} className="text-mutedForeground" />
+                          {formatDuration(entry.duration)}
+                        </div>
+                      </td>
+                      <td className="p-5 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="w-9 h-9 text-mutedForeground hover:text-primary hover:bg-primary/5 rounded-lg">
+                            <Play size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-9 h-9 text-mutedForeground hover:text-destructive hover:bg-destructive/5 rounded-lg"
+                            onClick={() => handleDeleteEntry(entry.id)}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-24 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center">
+                <Clock size={40} className="text-mutedForeground" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-bold text-foreground">No time entries yet</h3>
+                <p className="text-sm max-w-xs mx-auto">Start a timer on a task to begin tracking your productivity.</p>
+              </div>
+            </div>
+          )}
+        </Card>
+      </main>
 
+      {/* Modal */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal glass" onClick={(e) => e.stopPropagation()}>
-            <h2>Add Time Entry</h2>
-            <p className="modal-message">
-              To add a time entry, please use the timer feature on a task, or
-              this feature will be implemented soon.
-            </p>
-            <div className="modal-actions">
-              <button
-                className="primary-btn"
+        <div
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300"
+          onClick={() => setShowAddModal(false)}
+        >
+          <Card
+            className="w-full max-w-md p-8 shadow-2xl space-y-6 border-border/50 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black tracking-tight">Add Time Entry</h2>
+              <p className="text-mutedForeground text-sm leading-relaxed">
+                Direct entry creation is coming soon. For now, please use the <strong>Timer</strong> on individual tasks to track your specific work.
+              </p>
+            </div>
+            <div className="pt-4">
+              <Button
+                className="w-full rounded-xl h-12 font-bold"
                 onClick={() => setShowAddModal(false)}
               >
-                Close
-              </button>
+                Got it
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
-
-      <style jsx>{`
-        .timesheet-container {
-          padding: 3rem;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 3rem;
-        }
-        h1 {
-          font-size: 2.5rem;
-          font-weight: 800;
-          margin-bottom: 0.5rem;
-        }
-        .subtitle {
-          color: var(--muted-foreground);
-        }
-        .summary-card {
-          display: flex;
-          align-items: center;
-          padding: 1rem 2rem;
-          border-radius: 1rem;
-          gap: 2rem;
-        }
-        .summary-item {
-          display: flex;
-          flex-direction: column;
-        }
-        .summary-label {
-          font-size: 0.75rem;
-          color: var(--muted-foreground);
-          text-transform: uppercase;
-          font-weight: 600;
-        }
-        .summary-value {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: var(--primary);
-        }
-        .summary-divider {
-          width: 1px;
-          height: 30px;
-          background: var(--border);
-        }
-
-        .timesheet-controls {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem 1.5rem;
-          border-radius: 1rem;
-          margin-bottom: 2rem;
-        }
-        .date-nav {
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
-        }
-        .current-date {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          font-weight: 600;
-        }
-        .nav-btn {
-          color: var(--muted-foreground);
-          padding: 0.5rem;
-          border-radius: 50%;
-        }
-        .nav-btn:hover {
-          background: rgba(255, 255, 255, 0.05);
-          color: white;
-        }
-
-        .primary-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, var(--primary), #d946ef);
-          color: white;
-          border-radius: 0.625rem;
-          font-weight: 600;
-          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
-          transition: all 0.2s ease;
-          cursor: pointer;
-        }
-        .primary-btn:hover {
-          box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-          transform: translateY(-2px);
-        }
-
-        .entries-list {
-          border-radius: 1.5rem;
-          overflow: hidden;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          text-align: left;
-        }
-        th {
-          padding: 1.25rem 1.5rem;
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          color: var(--muted-foreground);
-          border-bottom: 1px solid var(--border);
-        }
-        td {
-          padding: 1.25rem 1.5rem;
-          border-bottom: 1px solid var(--border);
-        }
-        .entry-row:hover {
-          background: rgba(255, 255, 255, 0.02);
-        }
-        .task-cell {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-        .task-title {
-          font-weight: 600;
-        }
-        .project-tag {
-          font-size: 0.7rem;
-          color: var(--primary);
-          font-weight: 700;
-        }
-        .note-text {
-          font-size: 0.875rem;
-          color: var(--muted-foreground);
-        }
-        .duration-tag {
-          font-weight: 700;
-          font-family: monospace;
-          font-size: 1rem;
-        }
-        .actions-cell {
-          display: flex;
-          gap: 0.75rem;
-        }
-        .icon-btn {
-          color: var(--muted-foreground);
-          transition: color 0.2s;
-          cursor: pointer;
-        }
-        .icon-btn:hover {
-          color: white;
-        }
-        .icon-btn.delete:hover {
-          color: #ef4444;
-        }
-
-        .empty-state {
-          padding: 5rem;
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1rem;
-          color: var(--muted-foreground);
-        }
-        .muted-icon {
-          opacity: 0.2;
-        }
-
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 50;
-        }
-        .modal {
-          max-width: 500px;
-          padding: 2rem;
-          border-radius: 1rem;
-        }
-        .modal h2 {
-          margin-bottom: 1rem;
-          font-size: 1.5rem;
-        }
-        .modal-message {
-          color: var(--muted-foreground);
-          margin-bottom: 1.5rem;
-        }
-        .modal-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 0.75rem;
-        }
-      `}</style>
     </div>
   );
 }

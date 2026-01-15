@@ -1,6 +1,6 @@
 # Implementation Roadmap - Missing Features
 
-**Status:** 85% MVP Complete  
+**Status:** 90% MVP Complete  
 **Last Updated:** January 15, 2026
 
 ---
@@ -9,26 +9,35 @@
 
 **Priority:** CRITICAL - Must have for production launch
 
-### 1.1 Notifications System
+### 1.1 Notifications System ✅ COMPLETED
 
 **Effort:** 2 days  
 **Dependencies:** Socket.io (already integrated)
 
-- [ ] Notifications dropdown UI in header
-- [ ] Mark as read/unread functionality
-- [ ] Real-time notification delivery
-- [ ] Notification preferences page
-- [ ] Click notification → navigate to relevant page
-- [ ] Notification count badge
-- [ ] Clear all notifications
-- [ ] Filter by type (task, mention, message, etc.)
+- [x] Notifications dropdown UI in header
+- [x] Mark as read/unread functionality
+- [x] Real-time notification delivery via Socket.io
+- [x] Notification preferences page
+- [x] Click notification → navigate to relevant page
+- [x] Notification count badge
+- [x] Clear all notifications (mark all as read)
+- [x] Filter by type (task, mention, message, etc.)
 
-**API Endpoints Needed:**
+**API Endpoints Implemented:**
 
 - `GET /api/notifications` - Fetch user notifications
-- `PATCH /api/notifications/:id/read` - Mark as read
+- `PATCH /api/notifications/:id` - Mark as read/unread
 - `PATCH /api/notifications/read-all` - Mark all as read
 - `DELETE /api/notifications/:id` - Delete notification
+
+**Components Created:**
+- `components/notifications/notification-dropdown.tsx` - Main dropdown UI
+- `app/app/[slug]/settings/notifications/page.tsx` - Preferences page
+- `lib/notifications.ts` - Helper functions for creating notifications
+
+**Socket.io Events:**
+- `join-user` - Join user's notification room
+- `new-notification` - Real-time notification delivery
 
 ---
 
@@ -987,7 +996,7 @@ model Session {
 ### Week 1
 
 1. ✅ Review and prioritize Phase 1 features
-2. 🔲 Start with Notifications System (1.1)
+2. ✅ Notifications System (1.1) - COMPLETED
 3. 🔲 Build Personal Dashboard (1.2)
 
 ### Week 2

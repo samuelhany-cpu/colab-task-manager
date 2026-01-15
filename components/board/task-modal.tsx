@@ -99,48 +99,48 @@ export default function TaskModal({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content glass">
-        <div className="modal-header">
-          <h2>Create New Task</h2>
-          <button onClick={onClose} className="close-btn">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
+      <div className="w-full max-max-w-[500px] bg-card border border-border p-8 rounded-[1.5rem] shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-bold">Create New Task</h2>
+          <button onClick={onClose} className="text-mutedForeground hover:text-foreground transition-all">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {error && <div className="error-msg">{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-lg">{error}</div>}
 
-          <div className="form-group">
-            <label htmlFor="title">Task Title</label>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="title" className="text-sm font-bold text-mutedForeground">Task Title</label>
             <input
               id="title"
               name="title"
               type="text"
               required
               placeholder="What needs to be done?"
-              className="glass"
+              className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all"
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="description">Description</label>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="description" className="text-sm font-bold text-mutedForeground">Description</label>
             <textarea
               id="description"
               name="description"
               rows={3}
               placeholder="Add more details..."
-              className="glass"
+              className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
             />
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="status">Status</label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="status" className="text-sm font-bold text-mutedForeground">Status</label>
               <select
                 id="status"
                 name="status"
-                className="glass"
+                className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                 defaultValue={initialStatus}
               >
                 <option value="TODO">To Do</option>
@@ -149,12 +149,12 @@ export default function TaskModal({
               </select>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="priority">Priority</label>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="priority" className="text-sm font-bold text-mutedForeground">Priority</label>
               <select
                 id="priority"
                 name="priority"
-                className="glass"
+                className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
                 defaultValue="MEDIUM"
               >
                 <option value="LOW">Low</option>
@@ -165,13 +165,13 @@ export default function TaskModal({
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="assigneeId">Assign To</label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="assigneeId" className="text-sm font-bold text-mutedForeground">Assign To</label>
               <select
                 id="assigneeId"
                 name="assigneeId"
-                className="glass"
+                className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer disabled:opacity-50"
                 disabled={loadingMembers}
               >
                 <option value="">Unassigned</option>
@@ -182,34 +182,29 @@ export default function TaskModal({
                   </option>
                 ))}
               </select>
-              {loadingMembers && (
-                <span className="text-xs text-gray-400">
-                  Loading members...
-                </span>
-              )}
-              {!loadingMembers && members.length === 0 && (
-                <span className="text-xs text-amber-400">
-                  No members yet. Add members in the Members tab.
-                </span>
-              )}
+              {loadingMembers && <span className="text-[10px] text-mutedForeground">Loading members...</span>}
             </div>
 
-            <div className="form-group">
-              <label htmlFor="dueDate">Due Date</label>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="dueDate" className="text-sm font-bold text-mutedForeground">Due Date</label>
               <input
                 id="dueDate"
                 name="dueDate"
                 type="date"
-                className="glass"
+                className="px-4 py-3 bg-muted border border-border rounded-xl text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
               />
             </div>
           </div>
 
-          <div className="form-actions">
-            <button type="button" onClick={onClose} className="cancel-link">
+          <div className="flex justify-end items-center gap-6 pt-4">
+            <button type="button" onClick={onClose} className="text-sm font-medium text-mutedForeground hover:text-foreground transition-all">
               Cancel
             </button>
-            <button type="submit" className="primary-btn" disabled={loading}>
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-soft hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all"
+              disabled={loading}
+            >
               {loading ? "Creating..." : "Create Task"}
               {!loading && <ChevronRight size={18} />}
             </button>
@@ -217,120 +212,6 @@ export default function TaskModal({
         </form>
       </div>
 
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          animation: fadeIn 0.2s ease-out;
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        .modal-content {
-          width: 100%;
-          max-width: 500px;
-          padding: 2.5rem;
-          border-radius: 1.5rem;
-          animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        @keyframes slideUp {
-          from {
-            transform: translateY(20px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 2rem;
-        }
-        h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-        }
-        .close-btn {
-          color: var(--muted-foreground);
-          transition: color 0.2s;
-        }
-        .close-btn:hover {
-          color: white;
-        }
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          margin-bottom: 1.5rem;
-        }
-        .form-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1rem;
-        }
-        label {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: var(--muted-foreground);
-        }
-        input,
-        textarea,
-        select {
-          padding: 0.75rem 1rem;
-          border-radius: 0.75rem;
-          border: 1px solid var(--border);
-          background: rgba(255, 255, 255, 0.03);
-          color: white;
-          outline: none;
-        }
-        input:focus,
-        textarea:focus,
-        select:focus {
-          border-color: var(--primary);
-        }
-        option {
-          background: #1e293b;
-        }
-        .form-actions {
-          display: flex;
-          justify-content: flex-end;
-          align-items: center;
-          gap: 1.5rem;
-          margin-top: 1rem;
-        }
-        .cancel-link {
-          color: var(--muted-foreground);
-          font-size: 0.875rem;
-        }
-        .cancel-link:hover {
-          color: white;
-        }
-        .error-msg {
-          padding: 0.75rem;
-          background: rgba(239, 68, 68, 0.1);
-          color: #f87171;
-          border-radius: 0.5rem;
-          margin-bottom: 1.5rem;
-          font-size: 0.875rem;
-        }
-      `}</style>
     </div>
   );
 }
