@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, use, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import type { User } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 import {
   CheckSquare,
   AlertCircle,
@@ -12,7 +13,6 @@ import {
   Filter,
 } from "lucide-react";
 import Link from "next/link";
-import { getSocket } from "@/lib/socket-client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,19 @@ export default function MyTasksPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const { data: session } = useSession();
+  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, [supabase]);
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -56,19 +68,22 @@ export default function MyTasksPage({
   }, [slug]);
 
   useEffect(() => {
-    if (slug && session?.user) {
+    if (slug && user) {
       fetchMyTasks();
 
-      const socket = getSocket();
-      socket.on("task-updated", () => {
-        fetchMyTasks();
-      });
+      // Listen for updates related to user's tasks
+      const channel = supabase
+        .channel(`user:${user.id}`)
+        .on("broadcast", { event: "task-updated" }, () => {
+          fetchMyTasks();
+        })
+        .subscribe();
 
       return () => {
-        socket.off("task-updated");
+        supabase.removeChannel(channel);
       };
     }
-  }, [slug, session, fetchMyTasks]);
+  }, [slug, user, supabase, fetchMyTasks]);
 
   const filteredTasks = tasks.filter(
     (t) =>

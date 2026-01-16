@@ -1,6 +1,5 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notifyTaskAssigned } from "@/lib/notifications";
@@ -16,8 +15,8 @@ const taskSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -34,7 +33,7 @@ export async function GET(req: Request) {
   const membership = await prisma.projectMember.findFirst({
     where: {
       projectId,
-      userId: (session.user as { id: string }).id,
+      userId: user.id,
     },
   });
 
@@ -59,8 +58,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
@@ -71,7 +70,7 @@ export async function POST(req: Request) {
     const membership = await prisma.projectMember.findFirst({
       where: {
         projectId: data.projectId,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
 
@@ -91,7 +90,7 @@ export async function POST(req: Request) {
       data: {
         ...data,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        creatorId: (session.user as { id: string }).id,
+        creatorId: user.id,
         position,
       },
       include: {
@@ -110,23 +109,31 @@ export async function POST(req: Request) {
       data: {
         type: "CREATED",
         taskId: task.id,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
 
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.channel(`project:${data.projectId}`).send({
+      type: "broadcast",
+      event: "task-updated",
+      payload: { projectId: data.projectId, taskId: task.id, type: "CREATED" },
+    });
+
     // Send notification if task has assignee
-    if (data.assigneeId && data.assigneeId !== (session.user as { id: string }).id) {
+    if (data.assigneeId && data.assigneeId !== user.id) {
       try {
         await notifyTaskAssigned(
           data.assigneeId,
           task.title,
           task.id,
           task.projectId,
-          task.project.workspace.slug
+          task.project.workspace.slug,
         );
       } catch (notificationError) {
         console.error("Failed to send notification:", notificationError);
-        // Don't fail the task creation if notification fails
       }
     }
 
@@ -143,8 +150,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -169,7 +176,7 @@ export async function PATCH(req: Request) {
     const membership = await prisma.projectMember.findFirst({
       where: {
         projectId: task.projectId,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
 
@@ -177,7 +184,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Handle position update specifically
+    // Handle position update Specifically
     if (body.position !== undefined || body.status !== undefined) {
       const updatedTask = await prisma.task.update({
         where: { id: taskId },
@@ -192,11 +199,20 @@ export async function PATCH(req: Request) {
           data: {
             type: "STATUS_CHANGE",
             taskId,
-            userId: (session.user as { id: string }).id,
+            userId: user.id,
             metadata: { from: task.status, to: body.status },
           },
         });
       }
+
+      // Broadcast via Supabase Realtime
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = await createClient();
+      await supabase.channel(`project:${task.projectId}`).send({
+        type: "broadcast",
+        event: "task-updated",
+        payload: { projectId: task.projectId, taskId, type: "UPDATED" },
+      });
 
       return NextResponse.json(updatedTask);
     }
@@ -213,6 +229,15 @@ export async function PATCH(req: Request) {
               ? new Date(updateData.dueDate)
               : undefined,
       },
+    });
+
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.channel(`project:${task.projectId}`).send({
+      type: "broadcast",
+      event: "task-updated",
+      payload: { projectId: task.projectId, taskId, type: "UPDATED" },
     });
 
     return NextResponse.json(updatedTask);

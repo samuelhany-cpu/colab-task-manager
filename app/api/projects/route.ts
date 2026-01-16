@@ -1,6 +1,5 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -11,8 +10,8 @@ const projectSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -29,7 +28,7 @@ export async function GET(req: Request) {
   const membership = await prisma.workspaceMember.findFirst({
     where: {
       workspaceId,
-      userId: (session.user as { id: string }).id,
+      userId: user.id,
     },
   });
 
@@ -58,8 +57,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
@@ -70,7 +69,7 @@ export async function POST(req: Request) {
     const membership = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
 
@@ -85,7 +84,7 @@ export async function POST(req: Request) {
         workspaceId,
         members: {
           create: {
-            userId: (session.user as { id: string }).id,
+            userId: user.id,
             role: "OWNER",
           },
         },

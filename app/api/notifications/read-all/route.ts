@@ -1,24 +1,15 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // PATCH /api/notifications/read-all - Mark all notifications as read
 export async function PATCH() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
     const result = await prisma.notification.updateMany({
       where: { userId: user.id, read: false },
       data: { read: true },
@@ -32,7 +23,7 @@ export async function PATCH() {
     console.error("Error marking all notifications as read:", error);
     return NextResponse.json(
       { error: "Failed to mark all notifications as read" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

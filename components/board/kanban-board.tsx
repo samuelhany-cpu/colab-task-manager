@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Plus,
   MoreVertical,
@@ -13,7 +14,6 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
-import { getSocket } from "@/lib/socket-client";
 import { cn } from "@/lib/cn";
 import TaskModal from "./task-modal";
 
@@ -62,15 +62,27 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     fetchTasks();
-    const socket = getSocket();
-    socket.emit("join-project", projectId);
 
-    socket.on("task-updated", () => {
-      fetchTasks();
+    const supabase = (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      return createClient();
+    })();
+
+    let channel: RealtimeChannel;
+
+    supabase.then((client) => {
+      channel = client
+        .channel(`project:${projectId}`)
+        .on("broadcast", { event: "task-updated" }, () => {
+          fetchTasks();
+        })
+        .subscribe();
     });
 
     return () => {
-      socket.off("task-updated");
+      if (channel) {
+        supabase.then((client) => client.removeChannel(channel));
+      }
     };
   }, [projectId, fetchTasks]);
 
@@ -147,10 +159,6 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
       if (!res.ok) {
         // Revert on error
         fetchTasks();
-      } else {
-        // Emit socket event
-        const socket = getSocket();
-        socket.emit("task-updated", { projectId, taskId: draggedTask.id });
       }
     } catch (error) {
       console.error("Failed to update task:", error);
@@ -170,8 +178,6 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
       if (res.ok) {
         setTasks(tasks.filter((t) => t.id !== taskId));
-        const socket = getSocket();
-        socket.emit("task-updated", { projectId, taskId });
       }
     } catch (error) {
       console.error("Failed to delete task:", error);
@@ -304,7 +310,8 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
             key={column.status}
             className={cn(
               "flex flex-col bg-muted/30 rounded-2xl h-fit min-h-[200px] transition-all p-2",
-              dragOverColumn === column.status && "bg-primary/5 ring-2 ring-primary/50"
+              dragOverColumn === column.status &&
+                "bg-primary/5 ring-2 ring-primary/50",
             )}
             onDragOver={(e) => handleDragOver(e, column.status)}
             onDragLeave={handleDragLeave}
@@ -323,7 +330,7 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                   key={task.id}
                   className={cn(
                     "group relative p-4 rounded-xl border border-border bg-card text-card-foreground shadow-soft transition-all cursor-grab active:cursor-grabbing hover:-translate-y-1",
-                    draggedTask?.id === task.id && "opacity-50 scale-95"
+                    draggedTask?.id === task.id && "opacity-50 scale-95",
                   )}
                   draggable={openMenuTaskId !== task.id}
                   onDragStart={(e) => handleDragStart(e, task)}
@@ -379,7 +386,9 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                         )}
                       </div>
                     </div>
-                    <h4 className="text-[15px] font-semibold mb-4 leading-normal">{task.title}</h4>
+                    <h4 className="text-[15px] font-semibold mb-4 leading-normal">
+                      {task.title}
+                    </h4>
                     <div className="flex items-center gap-4 text-mutedForeground text-[11px]">
                       {task.dueDate && (
                         <div className="flex items-center gap-1.5">
@@ -404,9 +413,7 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                               }}
                             />
                           ) : (
-                            <div
-                              className="w-6 h-6 rounded-full border border-border bg-primary flex items-center justify-center text-[10px] font-bold text-white shadow-soft"
-                            >
+                            <div className="w-6 h-6 rounded-full border border-border bg-primary flex items-center justify-center text-[10px] font-bold text-white shadow-soft">
                               {(task.assignee.name ||
                                 task.assignee.email ||
                                 "?")[0].toUpperCase()}
@@ -427,14 +434,16 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                 className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-border text-mutedForeground text-sm hover:border-primary/50 hover:text-primary transition-all group mt-1"
                 onClick={() => handleAddTask(column.status)}
               >
-                <Plus size={16} className="group-hover:scale-110 transition-transform" />
+                <Plus
+                  size={16}
+                  className="group-hover:scale-110 transition-transform"
+                />
                 <span>Add Task</span>
               </button>
             </div>
           </div>
         ))}
       </div>
-
 
       <TaskModal
         projectId={projectId}
@@ -443,8 +452,6 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
         initialStatus={initialStatus}
         onTaskCreated={() => fetchTasks()}
       />
-
-
     </div>
   );
 }

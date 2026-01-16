@@ -1,6 +1,5 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -20,18 +19,17 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const userId = (session.user as { id: string }).id;
+  const userId = user.id;
 
   try {
     const body = await req.json();
     const data = updateTaskSchema.parse(body);
 
-    // Check if task exists and user has access
     const task = await prisma.task.findUnique({
       where: { id },
       include: { project: true },
@@ -41,7 +39,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Check project membership
     const membership = await prisma.projectMember.findFirst({
       where: {
         projectId: task.projectId,
@@ -53,8 +50,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // If status is changing, update position to end of new column
-    const updateData: Prisma.TaskUpdateInput = { ...data } as Prisma.TaskUpdateInput;
+    const updateData: Prisma.TaskUpdateInput = {
+      ...data,
+    } as Prisma.TaskUpdateInput;
     if (data.status && data.status !== task.status) {
       const lastTask = await prisma.task.findFirst({
         where: { projectId: task.projectId, status: data.status },
@@ -62,7 +60,6 @@ export async function PATCH(
       });
       updateData.position = lastTask ? lastTask.position + 1000 : 1000;
 
-      // Create activity for status change
       await prisma.activity.create({
         data: {
           type: "STATUS_CHANGE",
@@ -76,13 +73,12 @@ export async function PATCH(
       });
     }
 
-    // Handle dueDate conversion
     if (data.dueDate !== undefined) {
       updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
     }
 
-    // Check if assignee changed
-    const assigneeChanged = data.assigneeId !== undefined && data.assigneeId !== task.assigneeId;
+    const assigneeChanged =
+      data.assigneeId !== undefined && data.assigneeId !== task.assigneeId;
     const oldAssigneeId = task.assigneeId;
 
     const updatedTask = await prisma.task.update({
@@ -105,19 +101,34 @@ export async function PATCH(
       },
     });
 
-    // Send notification if assignee changed
-    if (assigneeChanged && data.assigneeId && data.assigneeId !== oldAssigneeId) {
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.channel(`project:${updatedTask.projectId}`).send({
+      type: "broadcast",
+      event: "task-updated",
+      payload: {
+        projectId: updatedTask.projectId,
+        taskId: id,
+        type: "UPDATED",
+      },
+    });
+
+    if (
+      assigneeChanged &&
+      data.assigneeId &&
+      data.assigneeId !== oldAssigneeId
+    ) {
       try {
         await notifyTaskAssigned(
           data.assigneeId,
           updatedTask.title,
           updatedTask.id,
           updatedTask.projectId,
-          updatedTask.project.workspace.slug
+          updatedTask.project.workspace.slug,
         );
       } catch (notificationError) {
         console.error("Failed to send notification:", notificationError);
-        // Don't fail the task update if notification fails
       }
     }
 
@@ -138,15 +149,14 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const userId = (session.user as { id: string }).id;
+  const userId = user.id;
 
   try {
-    // Check if task exists and user has access
     const task = await prisma.task.findUnique({
       where: { id },
     });
@@ -155,7 +165,6 @@ export async function DELETE(
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Check project membership
     const membership = await prisma.projectMember.findFirst({
       where: {
         projectId: task.projectId,
@@ -169,6 +178,15 @@ export async function DELETE(
 
     await prisma.task.delete({
       where: { id },
+    });
+
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.channel(`project:${task.projectId}`).send({
+      type: "broadcast",
+      event: "task-updated",
+      payload: { projectId: task.projectId, taskId: id, type: "DELETED" },
     });
 
     return NextResponse.json({ success: true });

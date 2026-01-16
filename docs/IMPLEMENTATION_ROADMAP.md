@@ -1,6 +1,6 @@
 # Implementation Roadmap - Missing Features
 
-**Status:** 90% MVP Complete  
+**Status:** 95% MVP Complete  
 **Last Updated:** January 15, 2026
 
 ---
@@ -31,38 +31,39 @@
 - `DELETE /api/notifications/:id` - Delete notification
 
 **Components Created:**
+
 - `components/notifications/notification-dropdown.tsx` - Main dropdown UI
 - `app/app/[slug]/settings/notifications/page.tsx` - Preferences page
 - `lib/notifications.ts` - Helper functions for creating notifications
 
 **Socket.io Events:**
+
 - `join-user` - Join user's notification room
 - `new-notification` - Real-time notification delivery
 
 ---
 
-### 1.2 Personal Dashboard
+### 1.2 Personal Dashboard [/] IN PROGRESS
 
 **Effort:** 1-2 days  
 **Dependencies:** None
 
-- [ ] Dashboard page at `/app/[slug]/dashboard`
+- [x] Dashboard page at `/app/[slug]`
 - [ ] Today's tasks widget
 - [ ] Overdue tasks widget
 - [ ] Active timer display
 - [ ] Upcoming due dates (next 7 days)
-- [ ] Recent activity feed
-- [ ] Quick stats (total tasks, completed today, time tracked)
+- [x] Recent activity feed
+- [x] Quick stats (total tasks, projects, members, hours)
 - [ ] Charts: Tasks by status, time tracked this week
 
-**API Endpoints Needed:**
+**API Endpoints Implemented:**
 
-- `GET /api/dashboard/stats?workspaceSlug=...` - Dashboard data
-- `GET /api/dashboard/activity?workspaceSlug=...` - Recent activity
+- `GET /api/workspaces/:slug/dashboard` - Stats and recent activity
 
 ---
 
-### 1.3 Password Reset
+### 1.3 Password Reset [ ] NOT STARTED
 
 **Effort:** 1 day  
 **Dependencies:** Email service (Resend/SendGrid)
@@ -181,27 +182,28 @@ model Subtask {
 
 ---
 
-### 2.2 Time Reports & Export
+### 2.2 Time Reports & Export [/] IN PROGRESS
 
 **Effort:** 2 days
 
-- [ ] Time reports page at `/app/[slug]/reports`
+- [x] Time tracking page at `/app/[slug]/timesheet`
 - [ ] Filter by date range, user, project
-- [ ] Summary: Total hours, billable, non-billable
+- [x] Summary: Total hours
 - [ ] Charts: Hours per day, per user, per project
 - [ ] Export to CSV
 - [ ] Export to PDF
-- [ ] Group by week/month
+- [ ] Group by week/month (UI selector exists)
 - [ ] Billable vs non-billable toggle on time entries
 
-**Database Changes:**
+**API Endpoints Implemented:**
 
-- Add `billable` Boolean field to TimeEntry (default: true)
+- `GET /api/time` - Fetch time entries and active timer
+- `POST /api/time` - Start/Stop timer and manual entry
+- `DELETE /api/time/:id` - Delete time entry
 
-**API Endpoints Needed:**
+**Database Implementation:**
 
-- `GET /api/reports/time?workspaceId=...&start=...&end=...` - Time report data
-- `GET /api/reports/export?format=csv|pdf` - Export report
+- `TimeEntry` and `Timer` models created.
 
 ---
 
@@ -244,10 +246,13 @@ model Subtask {
 
 ---
 
-### 2.5 Enhanced Chat Features
+### 2.5 Enhanced Chat Features [/] IN PROGRESS
 
 **Effort:** 3 days
 
+- [x] Basic Real-time Chat (Socket.io)
+- [x] Project Channels & Side-bar Navigation
+- [x] Direct Messages (DMs)
 - [ ] Threaded replies (reply to specific message)
 - [ ] Emoji reactions on messages
 - [ ] Pin important messages
@@ -258,48 +263,20 @@ model Subtask {
 - [ ] Message editing
 - [ ] Message deletion
 
-**Database Changes:**
+**Database Implementation:**
 
-```prisma
-model Message {
-  // ... existing fields
-  parentId   String?  // For threaded replies
-  parent     Message? @relation("ThreadReplies", fields: [parentId], references: [id])
-  replies    Message[] @relation("ThreadReplies")
-  reactions  Reaction[]
-  pinned     Boolean   @default(false)
-  edited     Boolean   @default(false)
-  editedAt   DateTime?
-}
-
-model Reaction {
-  id        String   @id @default(cuid())
-  emoji     String
-  messageId String
-  userId    String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  @@unique([messageId, userId, emoji])
-}
-
-model MessageRead {
-  id        String   @id @default(cuid())
-  messageId String
-  userId    String
-  readAt    DateTime @default(now())
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@unique([messageId, userId])
-}
-```
+- `Message` model created.
 
 ---
 
-### 2.6 File Organization
+### 2.6 File Organization [/] IN PROGRESS
 
 **Effort:** 2-3 days
 
+- [x] Basic File Listing (Workspace-wide collection)
+- [x] Project-specific file management
+- [x] File metadata & search
+- [x] File download
 - [ ] Folder hierarchy (create, rename, delete folders)
 - [ ] Move files between folders
 - [ ] Breadcrumb navigation
@@ -308,33 +285,9 @@ model MessageRead {
 - [ ] Version history
 - [ ] Restore previous version
 
-**Database Changes:**
+**Database Implementation:**
 
-```prisma
-model Folder {
-  id        String   @id @default(cuid())
-  name      String
-  parentId  String?
-  parent    Folder?  @relation("SubFolders", fields: [parentId], references: [id])
-  children  Folder[] @relation("SubFolders")
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  files     File[]
-  createdAt DateTime @default(now())
-}
-
-model FileVersion {
-  id           String   @id @default(cuid())
-  fileId       String
-  key          String   @unique
-  version      Int
-  size         Int
-  uploadedById String
-  createdAt    DateTime @default(now())
-  file         File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  uploader     User     @relation(fields: [uploadedById], references: [id])
-}
-```
+- `File` model created.
 
 ---
 
@@ -967,14 +920,14 @@ model Session {
 
 ### Total Estimated Time: 11-17 weeks
 
-| Phase                           | Duration  | Priority | Status                |
-| ------------------------------- | --------- | -------- | --------------------- |
-| Phase 1: MVP Completion         | 1-2 weeks | CRITICAL | 🟡 Not Started        |
-| Phase 2: Enhanced Features      | 2-3 weeks | HIGH     | 🔴 Blocked by Phase 1 |
-| Phase 3: Advanced Features      | 3-4 weeks | MEDIUM   | 🔴 Blocked by Phase 2 |
-| Phase 4: Integrations           | 2-3 weeks | LOW      | 🔴 Blocked by Phase 1 |
-| Phase 5: Security & Performance | 1-2 weeks | HIGH     | 🔴 Blocked by Phase 1 |
-| Phase 6: Mobile & UX Polish     | 2-3 weeks | MEDIUM   | 🔴 Blocked by Phase 1 |
+| Phase                           | Duration  | Priority | Status               |
+| ------------------------------- | --------- | -------- | -------------------- |
+| Phase 1: MVP Completion         | 1-2 weeks | CRITICAL | 🟡 IN PROGRESS (95%) |
+| Phase 2: Enhanced Features      | 2-3 weeks | HIGH     | � IN PROGRESS (40%)  |
+| Phase 3: Advanced Features      | 3-4 weeks | MEDIUM   | 🔴 Not Started       |
+| Phase 4: Integrations           | 2-3 weeks | LOW      | � IN PROGRESS (10%)  |
+| Phase 5: Security & Performance | 1-2 weeks | HIGH     | 🔴 Not Started       |
+| Phase 6: Mobile & UX Polish     | 2-3 weeks | MEDIUM   | 🔴 Not Started       |
 
 ---
 
@@ -997,7 +950,8 @@ model Session {
 
 1. ✅ Review and prioritize Phase 1 features
 2. ✅ Notifications System (1.1) - COMPLETED
-3. 🔲 Build Personal Dashboard (1.2)
+3. ✅ Workspace Dashboard Core (1.2) - PARTIAL
+4. 🔲 Complete Dashboard Widgets (1.2)
 
 ### Week 2
 

@@ -1,6 +1,5 @@
-"use client";
-
 import { useState, useEffect } from "react";
+import { type User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,15 +15,26 @@ import {
   MessageSquare,
   Settings,
 } from "lucide-react";
-import { signOut, useSession } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import NotificationDropdown from "@/components/notifications/notification-dropdown";
 import { cn } from "@/lib/cn";
 
 export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, [supabase]);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -68,7 +78,7 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
     <div
       className={cn(
         "h-screen sticky top-0 z-50 p-4 transition-all duration-500 ease-out bg-background",
-        collapsed ? "w-[100px]" : "w-[280px]"
+        collapsed ? "w-[100px]" : "w-[280px]",
       )}
     >
       <div className="h-full bg-card border border-border rounded-[2rem] flex flex-col overflow-hidden shadow-soft">
@@ -115,14 +125,21 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
                     "px-4 py-3 flex items-center justify-between rounded-xl text-mutedForeground no-underline transition-all duration-300 relative overflow-hidden group",
                     "hover:bg-muted hover:text-foreground hover:translate-x-1",
                     isActive &&
-                    "bg-primary/5 text-primary hover:translate-x-1 font-semibold",
-                    collapsed && "justify-center px-0 hover:scale-110"
+                      "bg-primary/5 text-primary hover:translate-x-1 font-semibold",
+                    collapsed && "justify-center px-0 hover:scale-110",
                   )}
                 >
-                  <div className={cn("flex items-center gap-4 z-10", collapsed && "gap-0")}>
+                  <div
+                    className={cn(
+                      "flex items-center gap-4 z-10",
+                      collapsed && "gap-0",
+                    )}
+                  >
                     <item.icon size={20} />
                     {!collapsed && (
-                      <span className="text-[15px] font-medium">{item.name}</span>
+                      <span className="text-[15px] font-medium">
+                        {item.name}
+                      </span>
                     )}
                   </div>
                   {isActive && !collapsed && (
@@ -148,7 +165,7 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
                 href={`/app/${workspaceSlug}/projects/new`}
                 className={cn(
                   "w-6 h-6 rounded-md flex items-center justify-center text-mutedForeground bg-muted border border-border hover:bg-primary hover:text-primary-foreground transition-all",
-                  collapsed && "w-8 h-8"
+                  collapsed && "w-8 h-8",
                 )}
                 title="New Project"
               >
@@ -167,18 +184,30 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
                         "px-4 py-3 flex items-center rounded-xl text-mutedForeground no-underline transition-all duration-300 relative overflow-hidden",
                         "hover:bg-muted hover:text-foreground hover:translate-x-1",
                         isActive && "bg-primary/5 text-primary font-semibold",
-                        collapsed && "justify-center px-0 hover:scale-110"
+                        collapsed && "justify-center px-0 hover:scale-110",
                       )}
                     >
-                      <div className={cn("flex items-center gap-4", collapsed && "gap-0")}>
+                      <div
+                        className={cn(
+                          "flex items-center gap-4",
+                          collapsed && "gap-0",
+                        )}
+                      >
                         <div
                           className={cn(
                             "w-2 h-2 rounded-full bg-gradient-to-br from-primary to-blue-600 transition-all",
-                            collapsed && "w-3 h-3"
+                            collapsed && "w-3 h-3",
                           )}
                         />
                         {!collapsed && (
-                          <span className={cn("text-sm", isActive ? "text-foreground font-semibold" : "text-mutedForeground font-normal")}>
+                          <span
+                            className={cn(
+                              "text-sm",
+                              isActive
+                                ? "text-foreground font-semibold"
+                                : "text-mutedForeground font-normal",
+                            )}
+                          >
                             {project.name}
                           </span>
                         )}
@@ -187,7 +216,9 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
                   );
                 })
               ) : !collapsed ? (
-                <div className="px-4 py-2 text-xs text-mutedForeground">No projects yet</div>
+                <div className="px-4 py-2 text-xs text-mutedForeground">
+                  No projects yet
+                </div>
               ) : null}
             </div>
           </div>
@@ -200,16 +231,18 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
               <div className="flex items-center gap-3 mb-4">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white border-2 border-border bg-gradient-to-br from-primary to-blue-600">
-                    {session?.user?.name?.[0]}
+                    {user?.email?.[0]?.toUpperCase() || "U"}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card bg-green-500" />
                 </div>
                 <div className="overflow-hidden flex-1">
                   <p className="text-sm font-bold text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-                    {session?.user?.name || "User"}
+                    {user?.user_metadata?.full_name ||
+                      user?.email?.split("@")[0] ||
+                      "User"}
                   </p>
                   <p className="text-xs text-mutedForeground">
-                    {session?.user?.email?.split("@")[0]}
+                    {user?.email?.split("@")[0]}
                   </p>
                 </div>
               </div>
@@ -226,7 +259,7 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
           ) : (
             <div className="flex justify-center relative pb-2">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white bg-gradient-to-br from-primary to-blue-600 shadow-soft">
-                {session?.user?.name?.[0]}
+                {user?.email?.[0]?.toUpperCase() || "U"}
               </div>
               <div className="absolute bottom-2 right-5 w-3 h-3 rounded-full border-2 border-card bg-green-500" />
             </div>
@@ -236,9 +269,12 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
             <button
               className={cn(
                 "flex-1 h-11 rounded-xl flex items-center justify-center gap-2 bg-destructive/5 text-destructive hover:bg-destructive/10 hover:scale-105 transition-all font-medium",
-                collapsed && "flex-col gap-0"
+                collapsed && "flex-col gap-0",
               )}
-              onClick={() => signOut()}
+              onClick={async () => {
+                await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
               title="Sign Out"
             >
               <LogOut size={20} />

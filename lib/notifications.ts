@@ -28,9 +28,15 @@ export async function createNotification({
       },
     });
 
-    // In a real implementation, you would emit this via Socket.io
-    // For now, the notification will be fetched via polling or on next page load
-    // To emit in real-time, you would need access to the Socket.io server instance
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("./supabase/server");
+    const supabase = await createClient();
+
+    await supabase.channel(`user:${userId}`).send({
+      type: "broadcast",
+      event: "new-notification",
+      payload: notification,
+    });
 
     return notification;
   } catch (error) {
@@ -47,7 +53,7 @@ export async function notifyTaskAssigned(
   taskTitle: string,
   taskId: string,
   projectId: string,
-  workspaceSlug: string
+  workspaceSlug: string,
 ) {
   return createNotification({
     userId: assigneeId,
@@ -66,7 +72,7 @@ export async function notifyCommentMention(
   taskTitle: string,
   taskId: string,
   projectId: string,
-  workspaceSlug: string
+  workspaceSlug: string,
 ) {
   return createNotification({
     userId,
@@ -83,15 +89,16 @@ export async function notifyMessageReceived(
   userId: string,
   senderName: string,
   projectId?: string,
-  workspaceSlug?: string
+  workspaceSlug?: string,
 ) {
   return createNotification({
     userId,
     type: "MESSAGE_RECEIVED",
     content: `${senderName} sent you a message`,
-    link: projectId && workspaceSlug 
-      ? `/app/${workspaceSlug}/chat?project=${projectId}` 
-      : `/app/${workspaceSlug}/chat`,
+    link:
+      projectId && workspaceSlug
+        ? `/app/${workspaceSlug}/chat?project=${projectId}`
+        : `/app/${workspaceSlug}/chat`,
   });
 }
 
@@ -102,7 +109,7 @@ export async function notifyProjectInvite(
   userId: string,
   projectName: string,
   projectId: string,
-  workspaceSlug: string
+  workspaceSlug: string,
 ) {
   return createNotification({
     userId,

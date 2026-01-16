@@ -1,14 +1,11 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
+import { uploadFile, getDownloadUrl } from "@/lib/storage";
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -21,11 +18,13 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Add absolute public path for client to use (Next.js public folder)
-    const filesWithUrls = files.map((file: { key: string }) => ({
-      ...file,
-      url: `/uploads/${file.key}`,
-    }));
+    // Generate signed URLs for each file
+    const filesWithUrls = await Promise.all(
+      files.map(async (file) => ({
+        ...file,
+        url: await getDownloadUrl(file.key),
+      })),
+    );
 
     return NextResponse.json(filesWithUrls);
   }
@@ -34,8 +33,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
@@ -57,23 +56,18 @@ export async function POST(req: Request) {
     const fileName = file.name;
     const key = `${Date.now()}-${fileName.replace(/\s+/g, "_")}`;
 
-    const uploadDir = join(process.cwd(), "public", "uploads");
+    // 1. Upload to Supabase Storage
+    await uploadFile(key, buffer, file.type);
 
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
-
-    const path = join(uploadDir, key);
-    await writeFile(path, buffer);
-
+    // 2. Create database record
     const fileRecord = await prisma.file.create({
       data: {
         originalName: fileName,
-        key, // Serving as the unique identifier/filename
+        key,
         mimeType: file.type,
         size: file.size,
         projectId,
-        uploadedById: (session.user as { id: string }).id,
+        uploadedById: user.id,
       },
     });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import type { User } from "@supabase/supabase-js";
 import {
   Clock,
   Plus,
@@ -12,7 +13,7 @@ import {
   ArrowLeft,
   Loader2,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,7 +37,18 @@ export default function TimesheetPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const { data: session } = useSession();
+  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    getUser();
+  }, [supabase]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -57,8 +69,8 @@ export default function TimesheetPage({
       }
     };
 
-    if (session?.user) fetchEntries();
-  }, [session]);
+    if (user) fetchEntries();
+  }, [user]);
 
   const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -113,7 +125,9 @@ export default function TimesheetPage({
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="font-medium text-mutedForeground">Loading your timesheet...</p>
+        <p className="font-medium text-mutedForeground">
+          Loading your timesheet...
+        </p>
       </div>
     );
 
@@ -125,11 +139,16 @@ export default function TimesheetPage({
             href={`/app/${slug}`}
             className="inline-flex items-center gap-2 text-xs font-black text-mutedForeground hover:text-primary transition-colors group"
           >
-            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft
+              size={14}
+              className="group-hover:-translate-x-1 transition-transform"
+            />
             BACK TO DASHBOARD
           </Link>
           <div className="space-y-1">
-            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Timesheet</h1>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
+              Timesheet
+            </h1>
             <p className="text-mutedForeground text-lg">
               Track your productivity and billable hours.
             </p>
@@ -138,12 +157,20 @@ export default function TimesheetPage({
 
         <Card className="flex items-center p-2 rounded-2xl bg-card shadow-sm border-border/40">
           <div className="px-6 py-3 border-r border-border/50">
-            <span className="block text-[10px] font-bold text-mutedForeground uppercase tracking-widest mb-1">Total Week</span>
-            <span className="text-2xl font-black text-primary leading-none">{formatDuration(totalTime)}</span>
+            <span className="block text-[10px] font-bold text-mutedForeground uppercase tracking-widest mb-1">
+              Total Week
+            </span>
+            <span className="text-2xl font-black text-primary leading-none">
+              {formatDuration(totalTime)}
+            </span>
           </div>
           <div className="px-6 py-3">
-            <span className="block text-[10px] font-bold text-mutedForeground uppercase tracking-widest mb-1">Today</span>
-            <span className="text-2xl font-black text-foreground leading-none">{formatDuration(getTodayTotal())}</span>
+            <span className="block text-[10px] font-bold text-mutedForeground uppercase tracking-widest mb-1">
+              Today
+            </span>
+            <span className="text-2xl font-black text-foreground leading-none">
+              {formatDuration(getTodayTotal())}
+            </span>
           </div>
         </Card>
       </header>
@@ -189,20 +216,38 @@ export default function TimesheetPage({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-muted/30 border-b border-border/50">
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Task / Project</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Note</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Date</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">Duration</th>
-                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">Actions</th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Task / Project
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Note
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Date
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Duration
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {entries.map((entry) => (
-                    <tr key={entry.id} className="group hover:bg-muted/10 transition-colors">
+                    <tr
+                      key={entry.id}
+                      className="group hover:bg-muted/10 transition-colors"
+                    >
                       <td className="p-5">
                         <div className="space-y-1">
-                          <div className="font-bold text-foreground group-hover:text-primary transition-colors">{entry.task.title}</div>
-                          <Badge variant="secondary" className="bg-primary/5 text-primary border-none text-[9px] font-bold uppercase tracking-wider px-2">
+                          <div className="font-bold text-foreground group-hover:text-primary transition-colors">
+                            {entry.task.title}
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className="bg-primary/5 text-primary border-none text-[9px] font-bold uppercase tracking-wider px-2"
+                          >
                             {entry.task.project.name}
                           </Badge>
                         </div>
@@ -214,7 +259,10 @@ export default function TimesheetPage({
                       </td>
                       <td className="p-5">
                         <span className="text-sm font-bold text-foreground opacity-70">
-                          {new Date(entry.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {new Date(entry.startTime).toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric", year: "numeric" },
+                          )}
                         </span>
                       </td>
                       <td className="p-5">
@@ -225,7 +273,11 @@ export default function TimesheetPage({
                       </td>
                       <td className="p-5 text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="w-9 h-9 text-mutedForeground hover:text-primary hover:bg-primary/5 rounded-lg">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-9 h-9 text-mutedForeground hover:text-primary hover:bg-primary/5 rounded-lg"
+                          >
                             <Play size={16} />
                           </Button>
                           <Button
@@ -249,8 +301,12 @@ export default function TimesheetPage({
                 <Clock size={40} className="text-mutedForeground" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-xl font-bold text-foreground">No time entries yet</h3>
-                <p className="text-sm max-w-xs mx-auto">Start a timer on a task to begin tracking your productivity.</p>
+                <h3 className="text-xl font-bold text-foreground">
+                  No time entries yet
+                </h3>
+                <p className="text-sm max-w-xs mx-auto">
+                  Start a timer on a task to begin tracking your productivity.
+                </p>
               </div>
             </div>
           )}
@@ -268,9 +324,13 @@ export default function TimesheetPage({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-2">
-              <h2 className="text-2xl font-black tracking-tight">Add Time Entry</h2>
+              <h2 className="text-2xl font-black tracking-tight">
+                Add Time Entry
+              </h2>
               <p className="text-mutedForeground text-sm leading-relaxed">
-                Direct entry creation is coming soon. For now, please use the <strong>Timer</strong> on individual tasks to track your specific work.
+                Direct entry creation is coming soon. For now, please use the{" "}
+                <strong>Timer</strong> on individual tasks to track your
+                specific work.
               </p>
             </div>
             <div className="pt-4">

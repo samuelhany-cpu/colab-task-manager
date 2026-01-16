@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -13,9 +12,9 @@ const workspaceSchema = z.object({
 });
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -23,7 +22,7 @@ export async function GET() {
     where: {
       members: {
         some: {
-          userId: (session.user as { id: string }).id,
+          userId: user.id,
         },
       },
     },
@@ -50,9 +49,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,10 +74,10 @@ export async function POST(req: Request) {
       data: {
         name,
         slug,
-        ownerId: (session.user as { id: string }).id,
+        ownerId: user.id,
         members: {
           create: {
-            userId: (session.user as { id: string }).id,
+            userId: user.id,
             role: "OWNER",
           },
         },

@@ -1,13 +1,12 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, NotificationType } from "@prisma/client";
 
 // GET /api/notifications - Fetch user notifications
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -15,14 +14,6 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter"); // 'all', 'unread', or specific type
     const limit = parseInt(searchParams.get("limit") || "50");
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
 
     const where: Prisma.NotificationWhereInput = { userId: user.id };
 
@@ -47,15 +38,15 @@ export async function GET(req: Request) {
     console.error("Error fetching notifications:", error);
     return NextResponse.json(
       { error: "Failed to fetch notifications" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 // POST /api/notifications - Create notification (internal/testing)
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -66,7 +57,7 @@ export async function POST(req: Request) {
     if (!type || !content || !userId) {
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -84,7 +75,7 @@ export async function POST(req: Request) {
     console.error("Error creating notification:", error);
     return NextResponse.json(
       { error: "Failed to create notification" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

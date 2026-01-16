@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signIn } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import {
   Mail,
   Lock,
@@ -11,6 +12,7 @@ import {
   CheckCircle,
   Loader2,
   LayoutGrid,
+  ShieldCheck,
 } from "lucide-react";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
@@ -34,9 +36,14 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const supabase = createClient();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showOtp, setShowOtp] = useState(false);
+  const [authMode, setAuthMode] = useState<"otp" | "password">("otp");
 
   useEffect(() => {
     if (searchParams.get("registered")) {
@@ -44,31 +51,64 @@ function LoginForm() {
     }
   }, [searchParams]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
+    const emailValue = formData.get("email") as string;
+    const passwordValue = formData.get("password") as string;
+    setEmail(emailValue);
 
     try {
-      const res = await signIn("credentials", {
-        redirect: false,
+      if (authMode === "otp") {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: emailValue,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) throw error;
+        setShowOtp(true);
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: emailValue,
+          password: passwordValue,
+        });
+        if (error) throw error;
+        router.push("/app");
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const token = formData.get("token") as string;
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
         email,
-        password,
+        token,
+        type: "email",
       });
 
-      if (res?.error) {
-        throw new Error("Invalid email or password");
-      }
+      if (error) throw error;
 
       router.push("/app");
       router.refresh();
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Invalid email or password",
+        err instanceof Error ? err.message : "Invalid or expired OTP code",
       );
     } finally {
       setLoading(false);
@@ -88,76 +128,139 @@ function LoginForm() {
           </div>
           <div className="space-y-1">
             <h1 className="text-3xl font-black tracking-tight text-foreground">
-              Welcome Back
+              {showOtp ? "Verify Identity" : "Welcome Back"}
             </h1>
             <p className="text-mutedForeground font-medium">
-              Continue your high-intensity work.
+              {showOtp
+                ? `Enter the code sent to ${email}`
+                : "Continue your high-intensity work."}
             </p>
           </div>
         </div>
 
-        {registered && (
+        {registered && !showOtp && (
           <div className="flex items-center gap-3 p-4 bg-green-500/10 text-green-600 border border-green-500/20 rounded-xl text-sm font-bold">
             <CheckCircle size={18} />
             Registration successful! Please sign in.
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form
+          onSubmit={showOtp ? handleVerifyOtp : handleSignIn}
+          className="space-y-6"
+        >
           {error && (
             <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl text-sm font-bold animate-in shake duration-300">
               {error}
             </div>
           )}
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
-                Email Address
-              </label>
-              <div className="relative group">
-                <Mail
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
-                  size={18}
-                />
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="john@example.com"
-                  className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
-                />
-              </div>
+          {!showOtp && (
+            <div className="flex p-1 bg-muted/50 rounded-xl border border-border/40 mb-2">
+              <button
+                type="button"
+                onClick={() => setAuthMode("otp")}
+                className={cn(
+                  "flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all",
+                  authMode === "otp"
+                    ? "bg-card text-primary shadow-sm"
+                    : "text-mutedForeground hover:text-foreground",
+                )}
+              >
+                Code Link
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode("password")}
+                className={cn(
+                  "flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all",
+                  authMode === "password"
+                    ? "bg-card text-primary shadow-sm"
+                    : "text-mutedForeground hover:text-foreground",
+                )}
+              >
+                Password
+              </button>
             </div>
+          )}
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center ml-1">
-                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground">
-                  Password
+          <div className="space-y-4">
+            {!showOtp ? (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                    Email Address
+                  </label>
+                  <div className="relative group">
+                    <Mail
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                      size={18}
+                    />
+                    <Input
+                      key="email-input"
+                      id="email"
+                      name="email"
+                      type="email"
+                      required
+                      placeholder="john@example.com"
+                      defaultValue={email}
+                      className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
+                    />
+                  </div>
+                </div>
+
+                {authMode === "password" && (
+                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                    <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                      Password
+                    </label>
+                    <div className="relative group">
+                      <Lock
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                        size={18}
+                      />
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                  Verification Code
                 </label>
-                <Link
-                  href="#"
-                  className="text-xs font-bold text-primary hover:underline"
+                <div className="relative group">
+                  <ShieldCheck
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
+                    size={18}
+                  />
+                  <Input
+                    key="token-input"
+                    id="token"
+                    name="token"
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="123456"
+                    className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all tracking-[0.5em] text-center font-bold"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOtp(false)}
+                  className="text-xs font-bold text-primary hover:underline ml-1"
                 >
-                  Forgot?
-                </Link>
+                  Change email
+                </button>
               </div>
-              <div className="relative group">
-                <Lock
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
-                  size={18}
-                />
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  className="pl-12 h-12 rounded-xl bg-muted/30 border-border/50 focus:bg-card transition-all"
-                />
-              </div>
-            </div>
+            )}
           </div>
 
           <Button
@@ -169,7 +272,11 @@ function LoginForm() {
               <Loader2 className="animate-spin" size={20} />
             ) : (
               <>
-                Sign In
+                {showOtp
+                  ? "Verify Code"
+                  : authMode === "otp"
+                    ? "Send OTP"
+                    : "Sign In"}
                 <ArrowRight
                   size={20}
                   className="group-hover:translate-x-1 transition-transform"

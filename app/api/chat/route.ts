@@ -1,6 +1,5 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -11,8 +10,8 @@ const messageSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -30,7 +29,7 @@ export async function GET(req: Request) {
   }
 
   if (receiverId) {
-    const currentUserId = (session.user as { id: string }).id;
+    const currentUserId = user.id;
     const messages = await prisma.message.findMany({
       where: {
         OR: [
@@ -49,11 +48,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const senderId = (session.user as { id: string }).id;
+  const senderId = user.id;
 
   try {
     const body = await req.json();
@@ -66,6 +65,30 @@ export async function POST(req: Request) {
       },
       include: { sender: { select: { id: true, name: true, image: true } } },
     });
+
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+
+    if (data.projectId) {
+      await supabase.channel(`project:${data.projectId}`).send({
+        type: "broadcast",
+        event: "new-message",
+        payload: message,
+      });
+    } else if (data.receiverId) {
+      // Broadcast to both receiver and sender for DM sync
+      await supabase.channel(`user:${data.receiverId}`).send({
+        type: "broadcast",
+        event: "new-message",
+        payload: message,
+      });
+      await supabase.channel(`user:${senderId}`).send({
+        type: "broadcast",
+        event: "new-message",
+        payload: message,
+      });
+    }
 
     return NextResponse.json(message, { status: 201 });
   } catch (error) {

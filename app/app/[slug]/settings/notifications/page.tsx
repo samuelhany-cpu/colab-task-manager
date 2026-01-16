@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import {
   Bell,
   Mail,
@@ -22,7 +22,10 @@ export default function NotificationPreferencesPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  useSession();
+  const supabase = createClient();
+  useEffect(() => {
+    supabase.auth.getUser();
+  }, [supabase]);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 

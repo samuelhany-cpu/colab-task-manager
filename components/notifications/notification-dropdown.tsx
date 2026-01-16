@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { type User } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { getSocket } from "@/lib/socket-client";
+import { createClient } from "@/lib/supabase/client";
 import { Bell, BellOff, Check, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -24,7 +24,8 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { data: session } = useSession();
+  const supabase = createClient();
+  const [user, setUser] = useState<User | null>(null);
 
   // Fetch notifications
   const fetchNotifications = async () => {
@@ -48,36 +49,37 @@ export default function NotificationDropdown() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  // Setup Socket.io for real-time notifications
+  // Setup Supabase Realtime for notifications
   useEffect(() => {
-    if (!session?.user?.email) return;
-
-    const socket = getSocket();
-
-    // Join user's notification room
-    fetch("/api/auth/session")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.user?.id) {
-          socket.emit("join-user", data.user.id);
-        }
-      });
-
-    // Listen for new notifications
-    const handleNewNotification = (notification: Notification) => {
-      setNotifications((prev) => [notification, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-
-      // Show browser notification if supported
-      if (Notification.permission === "granted") {
-        new Notification("New Notification", {
-          body: notification.content,
-          icon: "/favicon.ico",
-        });
-      }
+    const initAuth = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
     };
+    initAuth();
+  }, [supabase]);
 
-    socket.on("new-notification", handleNewNotification);
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen for new notifications via Supabase Realtime
+    const channel = supabase
+      .channel(`user:${user.id}`)
+      .on("broadcast", { event: "new-notification" }, ({ payload }) => {
+        const notification = payload as Notification;
+        setNotifications((prev) => [notification, ...prev]);
+        setUnreadCount((prev) => prev + 1);
+
+        // Show browser notification if supported
+        if (Notification.permission === "granted") {
+          new Notification("New Notification", {
+            body: notification.content,
+            icon: "/favicon.ico",
+          });
+        }
+      })
+      .subscribe();
 
     // Request notification permission
     if (Notification.permission === "default") {
@@ -85,9 +87,9 @@ export default function NotificationDropdown() {
     }
 
     return () => {
-      socket.off("new-notification", handleNewNotification);
+      supabase.removeChannel(channel);
     };
-  }, [session]);
+  }, [user, supabase]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -119,7 +121,7 @@ export default function NotificationDropdown() {
 
       if (res.ok) {
         setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, read } : n))
+          prev.map((n) => (n.id === id ? { ...n, read } : n)),
         );
         setUnreadCount((prev) => (read ? prev - 1 : prev + 1));
       }
@@ -213,7 +215,10 @@ export default function NotificationDropdown() {
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Notifications"
       >
-        <Bell size={20} className="group-hover:scale-110 transition-transform" />
+        <Bell
+          size={20}
+          className="group-hover:scale-110 transition-transform"
+        />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground border-2 border-background">
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -243,11 +248,17 @@ export default function NotificationDropdown() {
                   "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all",
                   filter === t
                     ? "bg-primary text-primary-foreground shadow-soft"
-                    : "text-mutedForeground hover:bg-muted hover:text-foreground"
+                    : "text-mutedForeground hover:bg-muted hover:text-foreground",
                 )}
                 onClick={() => setFilter(t)}
               >
-                {t === "all" ? "All" : t === "unread" ? "Unread" : t === "TASK_ASSIGNED" ? "Tasks" : "Messages"}
+                {t === "all"
+                  ? "All"
+                  : t === "unread"
+                    ? "Unread"
+                    : t === "TASK_ASSIGNED"
+                      ? "Tasks"
+                      : "Messages"}
               </button>
             ))}
           </div>
@@ -256,14 +267,18 @@ export default function NotificationDropdown() {
             {loading ? (
               <div className="p-12 text-center text-mutedForeground flex flex-col items-center gap-3">
                 <Loader2 className="animate-spin opacity-20" size={32} />
-                <span className="text-sm font-medium">Crunching notifications...</span>
+                <span className="text-sm font-medium">
+                  Crunching notifications...
+                </span>
               </div>
             ) : notifications.length === 0 ? (
               <div className="p-16 text-center text-mutedForeground flex flex-col items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                   <BellOff size={32} className="opacity-20" />
                 </div>
-                <p className="text-sm font-medium text-mutedForeground/60">No notifications found</p>
+                <p className="text-sm font-medium text-mutedForeground/60">
+                  No notifications found
+                </p>
               </div>
             ) : (
               notifications.map((notification) => (
@@ -271,7 +286,7 @@ export default function NotificationDropdown() {
                   key={notification.id}
                   className={cn(
                     "group flex items-start gap-4 p-4 transition-all hover:bg-muted/50",
-                    !notification.read && "bg-primary/[0.02]"
+                    !notification.read && "bg-primary/[0.02]",
                   )}
                 >
                   <div
@@ -282,10 +297,14 @@ export default function NotificationDropdown() {
                       {getNotificationIcon(notification.type)}
                     </div>
                     <div className="flex flex-col gap-1 min-w-0">
-                      <p className={cn(
-                        "text-sm leading-snug break-words",
-                        !notification.read ? "font-bold text-foreground" : "text-mutedForeground"
-                      )}>
+                      <p
+                        className={cn(
+                          "text-sm leading-snug break-words",
+                          !notification.read
+                            ? "font-bold text-foreground"
+                            : "text-mutedForeground",
+                        )}
+                      >
                         {notification.content}
                       </p>
                       <span className="text-[10px] font-medium text-mutedForeground opacity-60 uppercase tracking-wider">
@@ -328,7 +347,6 @@ export default function NotificationDropdown() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
