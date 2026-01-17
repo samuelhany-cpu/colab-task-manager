@@ -1,8 +1,27 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, ChevronRight } from "lucide-react";
-import { Task, Tag } from "@/types/task";
+import { cn } from "@/lib/cn";
+import { X, ChevronRight, Plus, Trash2, CheckCircle2, Circle, Loader2, MessageSquare, GripVertical, ArrowUpRight } from "lucide-react";
+import { Task, Tag, Subtask } from "@/types/task";
+import CommentSection from "@/components/tasks/comment-section";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface TaskModalProps {
   projectId: string;
@@ -41,6 +60,17 @@ export default function TaskModal({
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [loadingSubtasks, setLoadingSubtasks] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const fetchMembers = useCallback(async () => {
     try {
@@ -56,6 +86,22 @@ export default function TaskModal({
       setLoadingMembers(false);
     }
   }, [projectId]);
+
+  const fetchSubtasks = useCallback(async () => {
+    if (!task) return;
+    try {
+      setLoadingSubtasks(true);
+      const res = await fetch(`/api/tasks/${task.id}/subtasks`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubtasks(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch subtasks:", err);
+    } finally {
+      setLoadingSubtasks(false);
+    }
+  }, [task]);
 
   const fetchTags = useCallback(async () => {
     try {
@@ -75,11 +121,13 @@ export default function TaskModal({
       fetchTags();
       if (task) {
         setSelectedTagIds(task.tags?.map((t) => t.id) || []);
+        fetchSubtasks();
       } else {
         setSelectedTagIds([]);
+        setSubtasks([]);
       }
     }
-  }, [isOpen, fetchMembers, fetchTags, task]);
+  }, [isOpen, fetchMembers, fetchTags, fetchSubtasks, task]);
 
   if (!isOpen) return null;
 
@@ -154,6 +202,141 @@ export default function TaskModal({
     );
   };
 
+  const handleAddSubtask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!task || !newSubtaskTitle.trim() || addingSubtask) return;
+
+    try {
+      setAddingSubtask(true);
+      const res = await fetch(`/api/tasks/${task.id}/subtasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newSubtaskTitle }),
+      });
+
+      if (res.ok) {
+        const newSub = await res.json();
+        setSubtasks((prev) => [...prev, newSub]);
+        setNewSubtaskTitle("");
+      }
+    } catch (err) {
+      console.error("Failed to add subtask:", err);
+    } finally {
+      setAddingSubtask(false);
+    }
+  };
+
+  const toggleSubtask = async (subtask: Subtask) => {
+    try {
+      setSubtasks((prev) =>
+        prev.map((s) =>
+          s.id === subtask.id ? { ...s, completed: !s.completed } : s,
+        ),
+      );
+
+      const res = await fetch(`/api/subtasks/${subtask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed: !subtask.completed }),
+      });
+
+      if (!res.ok) {
+        // Revert on error
+        setSubtasks((prev) =>
+          prev.map((s) =>
+            s.id === subtask.id ? { ...s, completed: subtask.completed } : s,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error("Failed to toggle subtask:", err);
+    }
+  };
+
+  const handleDeleteSubtask = async (id: string) => {
+    try {
+      const res = await fetch(`/api/subtasks/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setSubtasks((prev) => prev.filter((s) => s.id !== id));
+      }
+    } catch (err) {
+      console.error("Failed to delete subtask:", err);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = subtasks.findIndex((i) => i.id === active.id);
+      const newIndex = subtasks.findIndex((i) => i.id === over.id);
+      const newItems = arrayMove(subtasks, oldIndex, newIndex);
+
+      // Optimistic update
+      setSubtasks(newItems);
+
+      // Calculate new position
+      let newPos: number;
+      if (newIndex === 0) {
+        newPos = newItems[1].position / 2;
+      } else if (newIndex === newItems.length - 1) {
+        newPos = newItems[newIndex - 1].position + 1000;
+      } else {
+        newPos = (newItems[newIndex - 1].position + newItems[newIndex + 1].position) / 2;
+      }
+
+      // Update API
+      try {
+        await fetch(`/api/subtasks/${active.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ position: newPos }),
+        });
+        // Update local items with exact new position to keep it consistent
+        newItems[newIndex].position = newPos;
+        setSubtasks([...newItems]);
+      } catch (e) {
+        console.error("Failed to update subtask position:", e);
+        // Rollback on error
+        fetchSubtasks();
+      }
+    }
+  };
+
+  const deleteSubtask = async (subtaskId: string) => {
+    try {
+      setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
+      await fetch(`/api/subtasks/${subtaskId}`, { method: "DELETE" });
+    } catch (err) {
+      console.error("Failed to delete subtask:", err);
+      fetchSubtasks(); // Refresh on error
+    }
+  };
+
+  const handlePromoteSubtask = async (subtaskId: string) => {
+    if (!confirm("Convert this subtask into a full task?")) return;
+    try {
+      const res = await fetch(`/api/subtasks/${subtaskId}/promote`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        const newTask = await res.json();
+        setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
+        onTaskCreated(newTask); // Add the new task to the board
+      }
+    } catch (err) {
+      console.error("Failed to promote subtask:", err);
+    }
+  };
+
+  const completedSubtasks = subtasks.filter((s) => s.completed).length;
+  const subtaskProgress =
+    subtasks.length > 0 ? (completedSubtasks / subtasks.length) * 100 : 0;
+
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-[500px] max-h-[90vh] overflow-y-auto bg-card border border-border p-8 rounded-[1.5rem] shadow-2xl animate-in slide-in-from-bottom-8 duration-300 custom-scrollbar">
@@ -222,11 +405,10 @@ export default function TaskModal({
                   key={tag.id}
                   type="button"
                   onClick={() => toggleTag(tag.id)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${
-                    selectedTagIds.includes(tag.id)
-                      ? "border-current opacity-100 ring-2 ring-current/20"
-                      : "border-current/20 opacity-50 grayscale-[0.5]"
-                  }`}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${selectedTagIds.includes(tag.id)
+                    ? "border-current opacity-100 ring-2 ring-current/20"
+                    : "border-current/20 opacity-50 grayscale-[0.5]"
+                    }`}
                   style={{
                     color: tag.color,
                     backgroundColor: `${tag.color}15`,
@@ -283,6 +465,79 @@ export default function TaskModal({
               </select>
             </div>
           </div>
+
+          {/* Subtasks Section */}
+          {task && (
+            <div className="flex flex-col gap-4 p-4 bg-muted/30 border border-border rounded-2xl">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-bold text-mutedForeground">
+                  Subtasks ({completedSubtasks}/{subtasks.length})
+                </label>
+                <div className="text-[10px] font-black uppercase text-primary">
+                  {Math.round(subtaskProgress)}%
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-500"
+                  style={{ width: `${subtaskProgress}%` }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={subtasks.map((s) => s.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {subtasks.map((sub) => (
+                      <SortableSubtask
+                        key={sub.id}
+                        sub={sub}
+                        onToggle={() => toggleSubtask(sub)}
+                        onDelete={() => deleteSubtask(sub.id)}
+                        onPromote={() => handlePromoteSubtask(sub.id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Add a subtask..."
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddSubtask(e);
+                    }
+                  }}
+                  className="w-full px-4 py-2 pr-10 bg-card border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddSubtask}
+                  disabled={!newSubtaskTitle.trim() || addingSubtask}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-primary hover:brightness-110 disabled:opacity-30"
+                >
+                  {addingSubtask ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Plus size={18} />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
@@ -359,6 +614,88 @@ export default function TaskModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function SortableSubtask({
+  sub,
+  onToggle,
+  onDelete,
+  onPromote,
+}: {
+  sub: Subtask;
+  onToggle: () => void;
+  onDelete: () => void;
+  onPromote: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sub.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 p-2 hover:bg-muted/50 rounded-lg group transition-all",
+        isDragging && "bg-muted shadow-lg ring-1 ring-primary/20"
+      )}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="text-mutedForeground hover:text-foreground cursor-grab active:cursor-grabbing transition-colors"
+      >
+        <GripVertical size={14} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`transition-colors ${sub.completed ? "text-primary" : "text-mutedForeground"}`}
+      >
+        {sub.completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+      </button>
+
+      <span
+        className={`text-sm transition-all flex-1 ${sub.completed ? "line-through text-mutedForeground" : "text-foreground font-medium"
+          }`}
+      >
+        {sub.title}
+      </span>
+
+      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+        <button
+          type="button"
+          onClick={onPromote}
+          title="Convert to Task"
+          className="text-mutedForeground hover:text-primary transition-all p-1"
+        >
+          <ArrowUpRight size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Delete"
+          className="text-mutedForeground hover:text-destructive transition-all p-1"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
     </div>
   );

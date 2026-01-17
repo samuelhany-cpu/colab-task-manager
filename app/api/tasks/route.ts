@@ -51,8 +51,12 @@ export async function GET(req: Request) {
       tags: {
         select: { id: true, name: true, color: true },
       },
+      subtasks: true,
       _count: {
-        select: { comments: true },
+        select: {
+          comments: true,
+          subtasks: true,
+        },
       },
     },
     orderBy: { position: "asc" },
@@ -99,12 +103,16 @@ export async function POST(req: Request) {
         position,
         tags: tagIds
           ? {
-              connect: tagIds.map((id) => ({ id })),
-            }
+            connect: tagIds.map((id) => ({ id })),
+          }
           : undefined,
       },
       include: {
         tags: true,
+        subtasks: true,
+        _count: {
+          select: { subtasks: true, comments: true }
+        }
       },
     });
 
@@ -238,15 +246,19 @@ export async function PATCH(req: Request) {
               : undefined,
         tags: tagIds
           ? {
-              set: tagIds.map((id) => ({ id })),
-            }
+            set: tagIds.map((id) => ({ id })),
+          }
           : undefined,
       },
       include: {
         tags: true,
+        subtasks: true,
         assignee: {
           select: { id: true, name: true, email: true, image: true },
         },
+        _count: {
+          select: { subtasks: true, comments: true }
+        }
       },
     });
 

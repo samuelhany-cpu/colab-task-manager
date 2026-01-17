@@ -7,6 +7,7 @@ const messageSchema = z.object({
   content: z.string().min(1),
   projectId: z.string().optional(),
   receiverId: z.string().optional(),
+  parentId: z.string().optional(),
 });
 
 export async function GET(req: Request) {
@@ -17,11 +18,35 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
   const receiverId = searchParams.get("receiverId");
+  const parentId = searchParams.get("parentId");
+
+  const include = {
+    sender: { select: { id: true, name: true, image: true } },
+    reactions: {
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+    },
+    _count: {
+      select: {
+        replies: true,
+      },
+    },
+  };
+
+  if (parentId) {
+    const messages = await prisma.message.findMany({
+      where: { parentId },
+      include,
+      orderBy: { createdAt: "asc" },
+    });
+    return NextResponse.json(messages);
+  }
 
   if (projectId) {
     const messages = await prisma.message.findMany({
-      where: { projectId },
-      include: { sender: { select: { id: true, name: true, image: true } } },
+      where: { projectId, parentId: null },
+      include,
       orderBy: { createdAt: "asc" },
       take: 50,
     });
@@ -32,12 +57,17 @@ export async function GET(req: Request) {
     const currentUserId = user.id;
     const messages = await prisma.message.findMany({
       where: {
-        OR: [
-          { senderId: currentUserId, receiverId },
-          { senderId: receiverId, receiverId: currentUserId },
+        AND: [
+          { parentId: null },
+          {
+            OR: [
+              { senderId: currentUserId, receiverId },
+              { senderId: receiverId, receiverId: currentUserId },
+            ],
+          },
         ],
       },
-      include: { sender: { select: { id: true, name: true, image: true } } },
+      include,
       orderBy: { createdAt: "asc" },
       take: 50,
     });
@@ -63,26 +93,31 @@ export async function POST(req: Request) {
         ...data,
         senderId,
       },
-      include: { sender: { select: { id: true, name: true, image: true } } },
+      include: {
+        sender: { select: { id: true, name: true, image: true } },
+        reactions: true,
+        _count: { select: { replies: true } },
+      },
     });
 
     // Broadcast via Supabase Realtime
     const { createClient } = await import("@/lib/supabase/server");
     const supabase = await createClient();
 
-    if (data.projectId) {
-      await supabase.channel(`project:${data.projectId}`).send({
-        type: "broadcast",
-        event: "new-message",
-        payload: message,
-      });
-    } else if (data.receiverId) {
-      // Broadcast to both receiver and sender for DM sync
-      await supabase.channel(`user:${data.receiverId}`).send({
-        type: "broadcast",
-        event: "new-message",
-        payload: message,
-      });
+    const channelId = data.parentId
+      ? `thread:${data.parentId}`
+      : data.projectId
+        ? `project:${data.projectId}`
+        : `user:${data.receiverId}`;
+
+    await supabase.channel(channelId).send({
+      type: "broadcast",
+      event: "new-message",
+      payload: message,
+    });
+
+    if (!data.projectId && data.receiverId) {
+      // Also send to sender's own channel for DMs
       await supabase.channel(`user:${senderId}`).send({
         type: "broadcast",
         event: "new-message",

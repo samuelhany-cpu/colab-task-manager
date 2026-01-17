@@ -18,8 +18,15 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import NotificationDropdown from "@/components/notifications/notification-dropdown";
 import { cn } from "@/lib/cn";
+import { Search } from "lucide-react";
 
-export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
+export default function Sidebar({
+  workspaceSlug,
+  onSearchClick
+}: {
+  workspaceSlug: string;
+  onSearchClick?: () => void;
+}) {
   const pathname = usePathname();
   const supabase = createClient();
   const { user } = useUser();
@@ -101,6 +108,26 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
                 </span>
               )}
             </div>
+
+            {/* Search Button */}
+            <button
+              onClick={onSearchClick}
+              className={cn(
+                "mx-3 px-4 py-3 flex items-center justify-between rounded-xl text-mutedForeground group transition-all duration-300 relative overflow-hidden",
+                "hover:bg-primary/10 hover:text-primary hover:translate-x-1",
+                collapsed && "justify-center px-0 hover:scale-110"
+              )}
+            >
+              <div className={cn("flex items-center gap-4 z-10", collapsed && "gap-0")}>
+                <Search size={20} className="group-hover:scale-110 transition-transform" />
+                {!collapsed && <span className="text-[15px] font-medium">Search</span>}
+              </div>
+              {!collapsed && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border text-[9px] font-black group-hover:bg-primary/20 transition-colors">
+                  ⌘K
+                </div>
+              )}
+            </button>
             {navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -111,7 +138,7 @@ export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
                     "px-4 py-3 flex items-center justify-between rounded-xl text-mutedForeground no-underline transition-all duration-300 relative overflow-hidden group",
                     "hover:bg-muted hover:text-foreground hover:translate-x-1",
                     isActive &&
-                      "bg-primary/5 text-primary hover:translate-x-1 font-semibold",
+                    "bg-primary/5 text-primary hover:translate-x-1 font-semibold",
                     collapsed && "justify-center px-0 hover:scale-110",
                   )}
                 >

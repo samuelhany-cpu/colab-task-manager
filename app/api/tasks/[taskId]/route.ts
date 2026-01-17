@@ -17,13 +17,14 @@ const updateTaskSchema = z.object({
 
 export async function PATCH(
   req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ taskId: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
+  const { taskId } = await params;
+  const id = taskId; // Keep id variable if used below, or just replace all instances of id with taskId
   const userId = user.id;
 
   try {
@@ -147,13 +148,14 @@ export async function PATCH(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ taskId: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
+  const { taskId } = await params;
+  const id = taskId;
   const userId = user.id;
 
   try {

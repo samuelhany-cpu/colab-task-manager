@@ -68,7 +68,7 @@ export async function POST(
     return NextResponse.json(tag);
   } catch (_error) {
     if (_error instanceof z.ZodError) {
-      return NextResponse.json({ error: _error.errors }, { status: 400 });
+      return NextResponse.json({ error: _error.issues }, { status: 400 });
     }
     return NextResponse.json(
       { error: "Internal Server Error" },

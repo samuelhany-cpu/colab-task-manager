@@ -7,6 +7,13 @@ export interface Tag {
   color: string;
 }
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  position: number;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -21,5 +28,9 @@ export interface Task {
     image?: string | null;
   };
   tags: Tag[];
-  _count: { comments: number };
+  subtasks?: Subtask[];
+  _count: {
+    comments: number;
+    subtasks?: number;
+  };
 }

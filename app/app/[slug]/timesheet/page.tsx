@@ -12,11 +12,20 @@ import {
   Play,
   ArrowLeft,
   Loader2,
+  Download,
+  Filter as FilterIcon,
+  BarChart3,
+  FileText,
 } from "lucide-react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import TimeEntryModal from "@/components/timesheet/time-entry-modal";
+import { useCallback } from "react";
 
 interface TimeEntry {
   id: string;
@@ -24,10 +33,15 @@ interface TimeEntry {
   note: string | null;
   startTime: string;
   endTime: string;
+  user: {
+    name: string | null;
+    email: string | null;
+  };
   task: {
     title: string;
     project: { name: string };
   };
+  isBillable?: boolean;
 }
 
 export default function TimesheetPage({
@@ -42,24 +56,56 @@ export default function TimesheetPage({
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("ALL");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  const fetchEntries = useCallback(async () => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (selectedProjectId !== "ALL") queryParams.append("projectId", selectedProjectId);
+      if (startDate) queryParams.append("startDate", startDate);
+      if (endDate) queryParams.append("endDate", endDate);
+
+      const res = await fetch(`/api/time?${queryParams.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEntries(data.entries || []);
+      }
+    } catch (e: unknown) {
+      console.error("Timesheet fetch error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProjectId, startDate, endDate]);
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      // First get workspace ID from slug
+      const wsRes = await fetch("/api/workspaces");
+      if (wsRes.ok) {
+        const workspaces = await wsRes.json();
+        const workspace = workspaces.find((w: any) => w.slug === slug);
+        if (workspace) {
+          const pRes = await fetch(`/api/projects?workspaceId=${workspace.id}`);
+          if (pRes.ok) {
+            const projectsData = await pRes.json();
+            setProjects(projectsData);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch projects:", e);
+    }
+  }, [slug]);
 
   useEffect(() => {
-    const fetchEntries = async () => {
-      try {
-        const res = await fetch("/api/time");
-        if (res.ok) {
-          const data = await res.json();
-          setEntries(data.entries || []);
-        }
-      } catch (e: unknown) {
-        console.error("Timesheet fetch error:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (user) fetchEntries();
-  }, [user]);
+    if (user) {
+      fetchEntries();
+      fetchProjects();
+    }
+  }, [user, fetchEntries, fetchProjects]);
 
   const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -106,6 +152,92 @@ export default function TimesheetPage({
       (e) => new Date(e.startTime).toDateString() === today,
     );
     return todayEntries.reduce((acc, curr) => acc + curr.duration, 0);
+  };
+
+  const handleExportPDF = () => {
+    if (entries.length === 0) return;
+
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.text(`Timesheet Report - ${new Date().toLocaleDateString()}`, 14, 22);
+
+    // Summary
+    doc.setFontSize(11);
+    doc.text(`Total Time: ${formatDuration(totalTime)}`, 14, 32);
+
+    const tableColumn = ["User", "Date", "Project", "Task", "Duration", "Billable", "Note"];
+    const tableRows = entries.map(entry => [
+      entry.user?.name || entry.user?.email || "Unknown",
+      new Date(entry.startTime).toLocaleDateString(),
+      entry.task.project.name,
+      entry.task.title,
+      formatDuration(entry.duration),
+      entry.isBillable ? "Yes" : "No",
+      entry.note || ""
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 40,
+    });
+
+    doc.save(`timesheet-report-${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
+  const handleExportCSV = () => {
+    if (entries.length === 0) return;
+
+    const headers = ["User", "Date", "Task", "Project", "Duration (sec)", "Duration (formatted)", "Note"];
+    const rows = entries.map((e) => [
+      e.user?.name || e.user?.email || "Unknown",
+      new Date(e.startTime).toLocaleDateString(),
+      e.task.title,
+      e.task.project.name,
+      e.duration,
+      formatDuration(e.duration),
+      e.note || "",
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `timesheet-export-${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getWeeklyData = () => {
+    const data = [];
+    const now = new Date();
+    // Start of current week (Sunday)
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(weekStart);
+      day.setDate(weekStart.getDate() + i);
+      const dayString = day.toDateString();
+      const dayEntries = entries.filter(
+        (e) => new Date(e.startTime).toDateString() === dayString,
+      );
+      const seconds = dayEntries.reduce((acc, curr) => acc + curr.duration, 0);
+      data.push({
+        label: day.toLocaleDateString("en-US", { weekday: "short" }),
+        hours: seconds / 3600,
+      });
+    }
+    return data;
   };
 
   const totalTime = entries.reduce((acc, curr) => acc + curr.duration, 0);
@@ -165,37 +297,113 @@ export default function TimesheetPage({
       </header>
 
       <main className="max-w-7xl mx-auto space-y-6">
-        {/* Controls */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-card p-4 rounded-2xl border border-border/40 shadow-sm">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full hover:bg-muted"
-              onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
-            >
-              <ChevronLeft size={20} />
-            </Button>
-            <div className="flex items-center gap-2.5 px-4 font-bold text-foreground">
-              <CalendarIcon size={18} className="text-primary" />
-              <span className="whitespace-nowrap">{getWeekDateRange()}</span>
+        {/* Filters & Actions */}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-card p-6 rounded-2xl border border-border/40 shadow-sm">
+            <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted border border-border rounded-xl">
+                <FilterIcon size={14} className="text-mutedForeground" />
+                <select
+                  className="bg-transparent border-none text-foreground outline-none text-xs font-bold cursor-pointer"
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                >
+                  <option value="ALL">All Projects</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  className="h-9 text-xs rounded-xl w-36 border-border/50"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+                <span className="text-mutedForeground text-xs font-bold">TO</span>
+                <Input
+                  type="date"
+                  className="h-9 text-xs rounded-xl w-36 border-border/50"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+
+              {(selectedProjectId !== "ALL" || startDate || endDate) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs font-bold text-mutedForeground hover:text-primary transition-colors"
+                  onClick={() => {
+                    setSelectedProjectId("ALL");
+                    setStartDate("");
+                    setEndDate("");
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              )}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full hover:bg-muted"
-              onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
-            >
-              <ChevronRight size={20} />
-            </Button>
+
+            <div className="flex items-center gap-3 w-full lg:w-auto">
+              <Button
+                variant="secondary"
+                className="flex-1 lg:flex-none rounded-xl font-bold border-border/50 gap-2 h-11 px-6 shadow-sm"
+                onClick={handleExportPDF}
+                disabled={entries.length === 0}
+              >
+                <FileText size={18} />
+                <span>Export PDF</span>
+              </Button>
+              <Button
+                variant="secondary"
+                className="flex-1 lg:flex-none rounded-xl font-bold border-border/50 gap-2 h-11 px-6 shadow-sm"
+                onClick={handleExportCSV}
+                disabled={entries.length === 0}
+              >
+                <Download size={18} />
+                <span>Export CSV</span>
+              </Button>
+              <Button
+                className="flex-1 lg:flex-none rounded-xl font-bold bg-primary shadow-lg shadow-primary/20 gap-2 h-11 px-6"
+                onClick={() => setShowAddModal(true)}
+              >
+                <Plus size={18} />
+                <span>Add Entry</span>
+              </Button>
+            </div>
           </div>
-          <Button
-            className="w-full sm:w-auto rounded-xl font-bold bg-primary shadow-lg shadow-primary/20 gap-2 px-6 h-11"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus size={18} />
-            <span>Add Entry</span>
-          </Button>
+
+          {/* Simple Chart */}
+          <Card className="p-6 rounded-2xl border-border/40 shadow-sm bg-card overflow-hidden">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <BarChart3 size={16} />
+              </div>
+              <h3 className="font-black text-sm uppercase tracking-wider">Activity this week</h3>
+            </div>
+            <div className="flex items-end justify-between h-32 gap-2 mt-4 px-2">
+              {getWeeklyData().map((day, idx) => {
+                const height = Math.min(100, (day.hours / 8) * 100); // Scale relative to 8 hours
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
+                    <div className="relative w-full flex justify-center">
+                      <div
+                        className="w-full max-w-[40px] bg-primary/10 rounded-t-lg transition-all duration-500 origin-bottom group-hover:bg-primary/30"
+                        style={{ height: `${height}%`, minHeight: '4px' }}
+                      />
+                      <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity bg-foreground text-background text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm">
+                        {day.hours.toFixed(1)}h
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black text-mutedForeground uppercase tracking-tighter">{day.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         </div>
 
         {/* List */}
@@ -303,36 +511,12 @@ export default function TimesheetPage({
       </main>
 
       {/* Modal */}
-      {showAddModal && (
-        <div
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300"
-          onClick={() => setShowAddModal(false)}
-        >
-          <Card
-            className="w-full max-w-md p-8 shadow-2xl space-y-6 border-border/50 animate-in zoom-in-95"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="space-y-2">
-              <h2 className="text-2xl font-black tracking-tight">
-                Add Time Entry
-              </h2>
-              <p className="text-mutedForeground text-sm leading-relaxed">
-                Direct entry creation is coming soon. For now, please use the{" "}
-                <strong>Timer</strong> on individual tasks to track your
-                specific work.
-              </p>
-            </div>
-            <div className="pt-4">
-              <Button
-                className="w-full rounded-xl h-12 font-bold"
-                onClick={() => setShowAddModal(false)}
-              >
-                Got it
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      <TimeEntryModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        workspaceSlug={slug}
+        onSuccess={fetchEntries}
+      />
     </div>
   );
 }

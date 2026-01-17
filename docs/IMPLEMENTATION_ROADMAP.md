@@ -90,7 +90,7 @@
 - [x] Add tags field to task creation/edit
 - [x] Tag input with autocomplete
 - [x] Display tags on task cards
-- [/] Filter tasks by tag
+- [x] Filter tasks by tag
 - [x] Color-coded tags
 - [x] Tag management (create, edit, delete)
 - [x] Workspace-level tags
@@ -126,12 +126,12 @@ model Tag {
 
 - [x] Calendar page at `/app/[slug]/projects/[projectId]/calendar`
 - [x] Month view with tasks by due date
-- [/] Week view
-- [/] Day view
-- [ ] Drag & drop to reschedule
+- [x] Week view
+- [x] Day view
+- [x] Drag & drop to reschedule
 - [x] Click date to create task
 - [x] Color-code by priority/status
-- [ ] Filter by assignee
+- [x] Filter by assignee
 
 **API Endpoints Needed:**
 
@@ -147,11 +147,11 @@ model Tag {
 
 **Effort:** 2-3 days
 
-- [ ] Add subtasks to task modal
-- [ ] Checkbox list UI
-- [ ] Mark subtasks complete/incomplete
-- [ ] Progress bar (3/5 completed)
-- [ ] Drag to reorder subtasks
+- [x] Add subtasks to task modal
+- [x] Checkbox list UI
+- [x] Mark subtasks complete/incomplete
+- [x] Progress bar (3/5 completed)
+- [x] Drag to reorder subtasks
 - [ ] Convert subtask to full task
 
 **Database Changes:**
@@ -181,12 +181,12 @@ model Subtask {
 **Effort:** 2 days
 
 - [x] Time tracking page at `/app/[slug]/timesheet`
-- [ ] Filter by date range, user, project
+- [x] Filter by date range, user, project
 - [x] Summary: Total hours
-- [ ] Charts: Hours per day, per user, per project
-- [ ] Export to CSV
+- [x] Charts: Hours per day, per user, per project
+- [x] Export to CSV
 - [ ] Export to PDF
-- [ ] Group by week/month (UI selector exists)
+- [x] Group by week/month (UI selector exists)
 - [ ] Billable vs non-billable toggle on time entries
 
 **API Endpoints Implemented:**
@@ -205,11 +205,11 @@ model Subtask {
 
 **Effort:** 1-2 days
 
-- [ ] Rich text editor with mention support
-- [ ] Type @ to trigger user search
-- [ ] Autocomplete dropdown
-- [ ] Highlight mentions in comments
-- [ ] Create notification on mention
+- [x] Rich text editor with mention support (Basic)
+- [x] Type @ to trigger user search
+- [x] Autocomplete dropdown
+- [x] Highlight mentions in comments
+- [x] Create notification on mention
 - [ ] Click mention → view user profile
 
 **Dependencies:** Rich text library (Tiptap or similar)
@@ -225,11 +225,11 @@ model Subtask {
 
 **Effort:** 2 days
 
-- [ ] Image preview modal (jpg, png, gif, svg)
-- [ ] PDF preview (pdf.js)
+- [x] Image preview modal (jpg, png, gif, svg)
+- [x] PDF preview
 - [ ] Video preview (mp4, webm)
 - [ ] Audio preview (mp3, wav)
-- [ ] Download button
+- [x] Download button
 - [ ] Zoom in/out for images
 - [ ] Navigate between files (next/prev)
 
@@ -271,9 +271,9 @@ model Subtask {
 - [x] Project-specific file management
 - [x] File metadata & search
 - [x] File download
-- [ ] Folder hierarchy (create, rename, delete folders)
+- [x] Folder hierarchy (create, rename, delete folders)
 - [ ] Move files between folders
-- [ ] Breadcrumb navigation
+- [x] Breadcrumb navigation
 - [ ] Folder permissions
 - [ ] File versioning (upload new version)
 - [ ] Version history
@@ -493,13 +493,13 @@ enum ApprovalStatus {
 
 **Effort:** 2 days
 
-- [ ] Global search across tasks, files, messages
-- [ ] Search filters (type, project, date, assignee)
-- [ ] Search results page
+- [x] Global search across tasks, files, messages
+- [x] Search filters (workspace context)
+- [x] Search results modal
 - [ ] Search history
-- [ ] Keyboard shortcut (Cmd/Ctrl + K)
-- [ ] Fuzzy matching
-- [ ] Search highlights
+- [x] Keyboard shortcut (Cmd/Ctrl + K)
+- [x] Fuzzy matching (Basic mode: contains)
+- [x] Search highlights (UI selection)
 
 **Implementation:**
 

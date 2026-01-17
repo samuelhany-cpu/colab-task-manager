@@ -13,6 +13,7 @@ import {
   ArrowUpDown,
   Edit,
   Trash2,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import TaskModal from "./task-modal";
@@ -40,6 +41,8 @@ export default function KanbanBoard({
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
 
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [availableTags, setAvailableTags] = useState<any[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -54,8 +57,21 @@ export default function KanbanBoard({
     }
   }, [projectId]);
 
+  const fetchTags = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceSlug}/tags`);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableTags(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch tags:", e);
+    }
+  }, [workspaceSlug]);
+
   useEffect(() => {
     fetchTasks();
+    fetchTags();
 
     const supabase = (async () => {
       const { createClient } = await import("@/lib/supabase/client");
@@ -236,6 +252,12 @@ export default function KanbanBoard({
       filtered = filtered.filter((t) => t.priority === filterPriority);
     }
 
+    if (selectedTagIds.length > 0) {
+      filtered = filtered.filter((t) =>
+        selectedTagIds.every((tagId) => t.tags?.some((tag) => tag.id === tagId)),
+      );
+    }
+
     return filtered.sort((a, b) => {
       if (sortBy === "dueDate") {
         if (!a.dueDate) return 1;
@@ -288,6 +310,40 @@ export default function KanbanBoard({
             </div>
 
             <div className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-xl">
+              <span className="text-mutedForeground text-xs font-bold uppercase tracking-wider">Tags:</span>
+              <div className="flex items-center gap-1.5 overflow-x-auto max-w-[200px] no-scrollbar">
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => {
+                      setSelectedTagIds((prev) =>
+                        prev.includes(tag.id)
+                          ? prev.filter((id) => id !== tag.id)
+                          : [...prev, tag.id],
+                      );
+                    }}
+                    className={cn(
+                      "text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all whitespace-nowrap",
+                      selectedTagIds.includes(tag.id)
+                        ? "shadow-sm scale-105"
+                        : "opacity-40 grayscale hover:opacity-100 hover:grayscale-0",
+                    )}
+                    style={{
+                      color: tag.color,
+                      backgroundColor: `${tag.color}10`,
+                      borderColor: selectedTagIds.includes(tag.id) ? tag.color : "transparent",
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+                {availableTags.length === 0 && (
+                  <span className="text-[10px] text-mutedForeground italic">No tags</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-xl">
               <ArrowUpDown size={16} className="text-mutedForeground" />
               <select
                 className="bg-transparent border-none text-foreground outline-none text-sm cursor-pointer"
@@ -319,7 +375,7 @@ export default function KanbanBoard({
             className={cn(
               "flex flex-col bg-muted/30 rounded-2xl h-fit min-h-[200px] transition-all p-2",
               dragOverColumn === column.status &&
-                "bg-primary/5 ring-2 ring-primary/50",
+              "bg-primary/5 ring-2 ring-primary/50",
             )}
             onDragOver={(e) => handleDragOver(e, column.status)}
             onDragLeave={handleDragLeave}
@@ -428,6 +484,15 @@ export default function KanbanBoard({
                         <MessageCircle size={12} />
                         <span>{task._count?.comments || 0}</span>
                       </div>
+                      {task._count?.subtasks !== undefined && task._count.subtasks > 0 && (
+                        <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-primary/10 text-primary rounded-md">
+                          <CheckCircle2 size={11} />
+                          <span className="font-bold">
+                            {task.subtasks?.filter((s) => s.completed).length || 0}/
+                            {task._count.subtasks}
+                          </span>
+                        </div>
+                      )}
                       <div className="ml-auto">
                         {task.assignee ? (
                           task.assignee.image ? (
@@ -495,10 +560,10 @@ export default function KanbanBoard({
             prev.map((t) =>
               t.id === updatedTask.id
                 ? ({
-                    ...updatedTask,
-                    tags: updatedTask.tags || [],
-                    _count: t._count,
-                  } as Task)
+                  ...updatedTask,
+                  tags: updatedTask.tags || [],
+                  _count: t._count,
+                } as Task)
                 : t,
             ),
           );

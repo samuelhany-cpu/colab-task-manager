@@ -2,14 +2,21 @@ import { createClient } from "./supabase/server";
 
 const BUCKET_NAME = process.env.SUPABASE_BUCKET_NAME || "colab-task-manager";
 
-export async function uploadFile(key: string, buffer: Buffer) {
+export async function uploadFile(
+  key: string,
+  buffer: Buffer,
+  contentType?: string,
+) {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.storage
-    .from(BUCKET_NAME)
-    .upload(key, buffer, {
+  const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(
+    key,
+    buffer,
+    {
       upsert: true,
-    });
+      contentType,
+    },
+  );
 
   if (error) throw error;
   return data;

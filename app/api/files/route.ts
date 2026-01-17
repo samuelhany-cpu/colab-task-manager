@@ -10,10 +10,16 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
+  const folderId = searchParams.get("folderId");
 
   if (projectId) {
+    const where: any = { projectId };
+    if (folderId) {
+      where.folderId = folderId === "root" ? null : folderId;
+    }
+
     const files = await prisma.file.findMany({
-      where: { projectId },
+      where,
       include: { uploadedBy: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -41,6 +47,7 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const projectId = formData.get("projectId") as string;
+    const folderId = formData.get("folderId") as string | null;
 
     if (!file || !projectId) {
       return NextResponse.json(
@@ -67,6 +74,7 @@ export async function POST(req: Request) {
         mimeType: file.type,
         size: file.size,
         projectId,
+        folderId: folderId || null,
         uploadedById: user.id,
       },
     });
