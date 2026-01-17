@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/cn";
-import { X, ChevronRight, Plus, Trash2, CheckCircle2, Circle, Loader2, MessageSquare, GripVertical, ArrowUpRight } from "lucide-react";
+import {
+  X,
+  ChevronRight,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  GripVertical,
+  ArrowUpRight,
+} from "lucide-react";
 import { Task, Tag, Subtask } from "@/types/task";
 import CommentSection from "@/components/tasks/comment-section";
 import {
@@ -69,7 +79,7 @@ export default function TaskModal({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const fetchMembers = useCallback(async () => {
@@ -284,7 +294,9 @@ export default function TaskModal({
       } else if (newIndex === newItems.length - 1) {
         newPos = newItems[newIndex - 1].position + 1000;
       } else {
-        newPos = (newItems[newIndex - 1].position + newItems[newIndex + 1].position) / 2;
+        newPos =
+          (newItems[newIndex - 1].position + newItems[newIndex + 1].position) /
+          2;
       }
 
       // Update API
@@ -335,7 +347,6 @@ export default function TaskModal({
   const completedSubtasks = subtasks.filter((s) => s.completed).length;
   const subtaskProgress =
     subtasks.length > 0 ? (completedSubtasks / subtasks.length) * 100 : 0;
-
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-4 animate-in fade-in duration-200">
@@ -405,10 +416,11 @@ export default function TaskModal({
                   key={tag.id}
                   type="button"
                   onClick={() => toggleTag(tag.id)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${selectedTagIds.includes(tag.id)
-                    ? "border-current opacity-100 ring-2 ring-current/20"
-                    : "border-current/20 opacity-50 grayscale-[0.5]"
-                    }`}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border transition-all ${
+                    selectedTagIds.includes(tag.id)
+                      ? "border-current opacity-100 ring-2 ring-current/20"
+                      : "border-current/20 opacity-50 grayscale-[0.5]"
+                  }`}
                   style={{
                     color: tag.color,
                     backgroundColor: `${tag.color}15`,
@@ -652,7 +664,7 @@ function SortableSubtask({
       style={style}
       className={cn(
         "flex items-center gap-2 p-2 hover:bg-muted/50 rounded-lg group transition-all",
-        isDragging && "bg-muted shadow-lg ring-1 ring-primary/20"
+        isDragging && "bg-muted shadow-lg ring-1 ring-primary/20",
       )}
     >
       <button
@@ -673,8 +685,11 @@ function SortableSubtask({
       </button>
 
       <span
-        className={`text-sm transition-all flex-1 ${sub.completed ? "line-through text-mutedForeground" : "text-foreground font-medium"
-          }`}
+        className={`text-sm transition-all flex-1 ${
+          sub.completed
+            ? "line-through text-mutedForeground"
+            : "text-foreground font-medium"
+        }`}
       >
         {sub.title}
       </span>

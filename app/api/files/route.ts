@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const folderId = searchParams.get("folderId");
 
   if (projectId) {
-    const where: any = { projectId };
+    const where: Record<string, string | null> = { projectId };
     if (folderId) {
       where.folderId = folderId === "root" ? null : folderId;
     }
@@ -67,7 +67,8 @@ export async function POST(req: Request) {
     await uploadFile(key, buffer, file.type);
 
     // 2. Create database record
-    const fileRecord = await prisma.file.create({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fileRecord = await (prisma.file as any).create({
       data: {
         originalName: fileName,
         key,

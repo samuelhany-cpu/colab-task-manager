@@ -11,7 +11,6 @@ const timeEntrySchema = z.object({
   isBillable: z.boolean().default(true),
 });
 
-
 export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user)
@@ -30,6 +29,7 @@ export async function GET(req: Request) {
     include: { task: true },
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { userId };
 
   if (taskId) {

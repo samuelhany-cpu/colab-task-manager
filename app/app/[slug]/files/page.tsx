@@ -14,10 +14,10 @@ import {
   FolderOpen,
   Share2,
   FolderPlus,
-  ArrowRight,
-  Folder as FolderIcon,
   ChevronRight,
   Upload,
+  ArrowRight,
+  Folder as FolderIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -67,16 +67,16 @@ export default function AllFilesPage({
   const { slug } = use(params);
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [loadingWorkspace, setLoadingWorkspace] = useState(true);
+  const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("ALL");
   const [currentFolderId, setCurrentFolderId] = useState<string>("root");
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [breadcrumbs, setBreadcrumbs] = useState<{ id: string; name: string }[]>([
-    { id: "root", name: "All Files" },
-  ]);
+  const [breadcrumbs, setBreadcrumbs] = useState<
+    { id: string; name: string }[]
+  >([{ id: "root", name: "All Files" }]);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -85,7 +85,7 @@ export default function AllFilesPage({
 
   const fetchWorkspaceData = useCallback(async () => {
     try {
-      setLoadingWorkspace(true);
+      setLoading(true);
       const wsRes = await fetch("/api/workspaces");
       if (!wsRes.ok) return;
       const workspaces: Workspace[] = await wsRes.json();
@@ -118,18 +118,29 @@ export default function AllFilesPage({
           setFolders([]); // Don't show folders in "All Projects" view to avoid confusion
         } else {
           // Fetch specific project files and folders
-          const fRes = await fetch(`/api/files?projectId=${selectedProjectId}&folderId=${currentFolderId}`);
+          const fRes = await fetch(
+            `/api/files?projectId=${selectedProjectId}&folderId=${currentFolderId}`,
+          );
           const projectFiles = await fRes.json();
           if (Array.isArray(projectFiles)) {
-            const project = projectsData.find((p: Project) => p.id === selectedProjectId);
-            allFiles = projectFiles.map((f: FileRecord) => ({ ...f, project: { name: project?.name || "" } }));
+            const project = projectsData.find(
+              (p: Project) => p.id === selectedProjectId,
+            );
+            allFiles = projectFiles.map((f: FileRecord) => ({
+              ...f,
+              project: { name: project?.name || "" },
+            }));
           }
 
-          const foldRes = await fetch(`/api/projects/${selectedProjectId}/folders`);
+          const foldRes = await fetch(
+            `/api/projects/${selectedProjectId}/folders`,
+          );
           if (foldRes.ok) {
             const foldersData = await foldRes.json();
             allFolders = foldersData.filter((f: Folder) =>
-              currentFolderId === "root" ? !f.parentId : f.parentId === currentFolderId
+              currentFolderId === "root"
+                ? !f.parentId
+                : f.parentId === currentFolderId,
             );
           }
           setFolders(allFolders);
@@ -139,7 +150,7 @@ export default function AllFilesPage({
     } catch (e) {
       console.error("Failed to fetch workspace data:", e);
     } finally {
-      setLoadingWorkspace(false);
+      setLoading(false);
     }
   }, [slug, selectedProjectId, currentFolderId]);
 
@@ -223,7 +234,9 @@ export default function AllFilesPage({
 
   const handleNextFile = () => {
     if (!previewFile) return;
-    const currentIndex = filteredFiles.findIndex(f => f.id === previewFile.id);
+    const currentIndex = filteredFiles.findIndex(
+      (f) => f.id === previewFile.id,
+    );
     if (currentIndex !== -1 && currentIndex < filteredFiles.length - 1) {
       setPreviewFile(filteredFiles[currentIndex + 1]);
     }
@@ -231,7 +244,9 @@ export default function AllFilesPage({
 
   const handlePrevFile = () => {
     if (!previewFile) return;
-    const currentIndex = filteredFiles.findIndex(f => f.id === previewFile.id);
+    const currentIndex = filteredFiles.findIndex(
+      (f) => f.id === previewFile.id,
+    );
     if (currentIndex > 0) {
       setPreviewFile(filteredFiles[currentIndex - 1]);
     }
@@ -285,7 +300,9 @@ export default function AllFilesPage({
             >
               <option value="ALL">All Projects</option>
               {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
               ))}
             </select>
 
@@ -312,8 +329,15 @@ export default function AllFilesPage({
                 className="rounded-xl font-bold h-11 gap-2 px-6 shadow-lg shadow-primary/20"
                 disabled={uploading || selectedProjectId === "ALL"}
               >
-                <label htmlFor="file-upload" className="cursor-pointer flex items-center gap-2">
-                  {uploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  {uploading ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Upload size={18} />
+                  )}
                   <span>{uploading ? "Uploading..." : "Upload File"}</span>
                 </label>
               </Button>
@@ -326,7 +350,9 @@ export default function AllFilesPage({
           <div className="flex items-center gap-2 p-2 px-4 bg-muted/40 rounded-xl border border-border/30 w-fit">
             {breadcrumbs.map((crumb, idx) => (
               <div key={crumb.id} className="flex items-center gap-2">
-                {idx > 0 && <ChevronRight size={14} className="text-mutedForeground" />}
+                {idx > 0 && (
+                  <ChevronRight size={14} className="text-mutedForeground" />
+                )}
                 <button
                   onClick={() => {
                     setCurrentFolderId(crumb.id);
@@ -334,7 +360,9 @@ export default function AllFilesPage({
                   }}
                   className={cn(
                     "text-xs font-bold transition-colors",
-                    idx === breadcrumbs.length - 1 ? "text-primary" : "text-mutedForeground hover:text-foreground"
+                    idx === breadcrumbs.length - 1
+                      ? "text-primary"
+                      : "text-mutedForeground hover:text-foreground",
                   )}
                 >
                   {crumb.name}
@@ -354,7 +382,10 @@ export default function AllFilesPage({
                 key={folder.id}
                 onClick={() => {
                   setCurrentFolderId(folder.id);
-                  setBreadcrumbs([...breadcrumbs, { id: folder.id, name: folder.name }]);
+                  setBreadcrumbs([
+                    ...breadcrumbs,
+                    { id: folder.id, name: folder.name },
+                  ]);
                 }}
                 className="p-6 group flex items-center gap-6 cursor-pointer hover:shadow-2xl hover:-translate-y-1 transition-all border-border/40 bg-card rounded-[2rem]"
               >
@@ -362,10 +393,17 @@ export default function AllFilesPage({
                   <FolderIcon size={28} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-foreground truncate">{folder.name}</h3>
-                  <p className="text-[10px] font-black text-mutedForeground uppercase tracking-widest mt-0.5">Folder</p>
+                  <h3 className="font-bold text-foreground truncate">
+                    {folder.name}
+                  </h3>
+                  <p className="text-[10px] font-black text-mutedForeground uppercase tracking-widest mt-0.5">
+                    Folder
+                  </p>
                 </div>
-                <ArrowRight size={20} className="text-mutedForeground opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                <ArrowRight
+                  size={20}
+                  className="text-mutedForeground opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0"
+                />
               </Card>
             ))}
 
@@ -384,7 +422,9 @@ export default function AllFilesPage({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg"
-                    onClick={(e) => { e.stopPropagation(); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
                     <Share2 size={14} />
                   </Button>
@@ -404,7 +444,9 @@ export default function AllFilesPage({
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 hover:bg-primary/10 hover:text-primary rounded-lg"
-                    onClick={(e) => { e.stopPropagation(); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
                     <MoreVertical size={14} />
                   </Button>
@@ -485,9 +527,22 @@ export default function AllFilesPage({
       <FilePreview
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
-        file={previewFile ? { ...previewFile, url: previewFile.url || "" } : null}
-        onNext={previewFile && filteredFiles.findIndex(f => f.id === previewFile.id) < filteredFiles.length - 1 ? handleNextFile : undefined}
-        onPrev={previewFile && filteredFiles.findIndex(f => f.id === previewFile.id) > 0 ? handlePrevFile : undefined}
+        file={
+          previewFile ? { ...previewFile, url: previewFile.url || "" } : null
+        }
+        onNext={
+          previewFile &&
+          filteredFiles.findIndex((f) => f.id === previewFile.id) <
+            filteredFiles.length - 1
+            ? handleNextFile
+            : undefined
+        }
+        onPrev={
+          previewFile &&
+          filteredFiles.findIndex((f) => f.id === previewFile.id) > 0
+            ? handlePrevFile
+            : undefined
+        }
         onRefresh={fetchWorkspaceData}
       />
 
@@ -506,7 +561,9 @@ export default function AllFilesPage({
             <h2 className="text-xl font-bold mb-6">Create New Folder</h2>
             <form onSubmit={handleCreateFolder} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground">Folder Name</label>
+                <label className="text-xs font-black uppercase tracking-widest text-mutedForeground">
+                  Folder Name
+                </label>
                 <Input
                   autoFocus
                   placeholder="Enter folder name..."

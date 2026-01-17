@@ -24,7 +24,8 @@ export async function GET(
       orderBy: { name: "asc" },
     });
     return NextResponse.json(tags);
-  } catch (_error) {
+  } catch (error) {
+    console.error(error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },
@@ -66,10 +67,11 @@ export async function POST(
     });
 
     return NextResponse.json(tag);
-  } catch (_error) {
-    if (_error instanceof z.ZodError) {
-      return NextResponse.json({ error: _error.issues }, { status: 400 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues }, { status: 400 });
     }
+    console.error(error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 },

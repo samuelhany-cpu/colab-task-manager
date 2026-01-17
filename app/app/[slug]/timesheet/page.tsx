@@ -3,19 +3,16 @@
 import { useState, useEffect, use } from "react";
 import { useUser } from "@/components/providers/user-provider";
 import {
-  Clock,
-  Plus,
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
   Trash2,
-  Play,
+  Plus,
   ArrowLeft,
   Loader2,
   Download,
   Filter as FilterIcon,
   BarChart3,
   FileText,
+  Clock,
+  Play,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -44,6 +41,17 @@ interface TimeEntry {
   isBillable?: boolean;
 }
 
+interface Project {
+  id: string;
+  name: string;
+}
+
+interface Workspace {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export default function TimesheetPage({
   params,
 }: {
@@ -55,8 +63,7 @@ export default function TimesheetPage({
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("ALL");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -64,7 +71,8 @@ export default function TimesheetPage({
   const fetchEntries = useCallback(async () => {
     try {
       const queryParams = new URLSearchParams();
-      if (selectedProjectId !== "ALL") queryParams.append("projectId", selectedProjectId);
+      if (selectedProjectId !== "ALL")
+        queryParams.append("projectId", selectedProjectId);
       if (startDate) queryParams.append("startDate", startDate);
       if (endDate) queryParams.append("endDate", endDate);
 
@@ -85,8 +93,8 @@ export default function TimesheetPage({
       // First get workspace ID from slug
       const wsRes = await fetch("/api/workspaces");
       if (wsRes.ok) {
-        const workspaces = await wsRes.json();
-        const workspace = workspaces.find((w: any) => w.slug === slug);
+        const workspaces: Workspace[] = await wsRes.json();
+        const workspace = workspaces.find((w) => w.slug === slug);
         if (workspace) {
           const pRes = await fetch(`/api/projects?workspaceId=${workspace.id}`);
           if (pRes.ok) {
@@ -129,23 +137,6 @@ export default function TimesheetPage({
     }
   };
 
-  const getWeekDateRange = () => {
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay() + currentWeekOffset * 7);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-
-    const formatDate = (date: Date) => {
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-    };
-
-    return `${formatDate(weekStart)} - ${formatDate(weekEnd)}, ${weekEnd.getFullYear()}`;
-  };
-
   const getTodayTotal = () => {
     const today = new Date().toDateString();
     const todayEntries = entries.filter(
@@ -167,15 +158,23 @@ export default function TimesheetPage({
     doc.setFontSize(11);
     doc.text(`Total Time: ${formatDuration(totalTime)}`, 14, 32);
 
-    const tableColumn = ["User", "Date", "Project", "Task", "Duration", "Billable", "Note"];
-    const tableRows = entries.map(entry => [
+    const tableColumn = [
+      "User",
+      "Date",
+      "Project",
+      "Task",
+      "Duration",
+      "Billable",
+      "Note",
+    ];
+    const tableRows = entries.map((entry) => [
       entry.user?.name || entry.user?.email || "Unknown",
       new Date(entry.startTime).toLocaleDateString(),
       entry.task.project.name,
       entry.task.title,
       formatDuration(entry.duration),
       entry.isBillable ? "Yes" : "No",
-      entry.note || ""
+      entry.note || "",
     ]);
 
     autoTable(doc, {
@@ -190,7 +189,15 @@ export default function TimesheetPage({
   const handleExportCSV = () => {
     if (entries.length === 0) return;
 
-    const headers = ["User", "Date", "Task", "Project", "Duration (sec)", "Duration (formatted)", "Note"];
+    const headers = [
+      "User",
+      "Date",
+      "Task",
+      "Project",
+      "Duration (sec)",
+      "Duration (formatted)",
+      "Note",
+    ];
     const rows = entries.map((e) => [
       e.user?.name || e.user?.email || "Unknown",
       new Date(e.startTime).toLocaleDateString(),
@@ -209,7 +216,10 @@ export default function TimesheetPage({
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `timesheet-export-${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute(
+      "download",
+      `timesheet-export-${new Date().toISOString().split("T")[0]}.csv`,
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -310,7 +320,9 @@ export default function TimesheetPage({
                 >
                   <option value="ALL">All Projects</option>
                   {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -322,7 +334,9 @@ export default function TimesheetPage({
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
-                <span className="text-mutedForeground text-xs font-bold">TO</span>
+                <span className="text-mutedForeground text-xs font-bold">
+                  TO
+                </span>
                 <Input
                   type="date"
                   className="h-9 text-xs rounded-xl w-36 border-border/50"
@@ -382,23 +396,30 @@ export default function TimesheetPage({
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                 <BarChart3 size={16} />
               </div>
-              <h3 className="font-black text-sm uppercase tracking-wider">Activity this week</h3>
+              <h3 className="font-black text-sm uppercase tracking-wider">
+                Activity this week
+              </h3>
             </div>
             <div className="flex items-end justify-between h-32 gap-2 mt-4 px-2">
               {getWeeklyData().map((day, idx) => {
                 const height = Math.min(100, (day.hours / 8) * 100); // Scale relative to 8 hours
                 return (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
+                  <div
+                    key={idx}
+                    className="flex-1 flex flex-col items-center gap-2 group"
+                  >
                     <div className="relative w-full flex justify-center">
                       <div
                         className="w-full max-w-[40px] bg-primary/10 rounded-t-lg transition-all duration-500 origin-bottom group-hover:bg-primary/30"
-                        style={{ height: `${height}%`, minHeight: '4px' }}
+                        style={{ height: `${height}%`, minHeight: "4px" }}
                       />
                       <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity bg-foreground text-background text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm">
                         {day.hours.toFixed(1)}h
                       </div>
                     </div>
-                    <span className="text-[10px] font-black text-mutedForeground uppercase tracking-tighter">{day.label}</span>
+                    <span className="text-[10px] font-black text-mutedForeground uppercase tracking-tighter">
+                      {day.label}
+                    </span>
                   </div>
                 );
               })}
@@ -449,11 +470,7 @@ export default function TimesheetPage({
                           </Badge>
                         </div>
                       </td>
-                      <td className="p-5">
-                        <span className="text-sm text-mutedForeground font-medium italic">
-                          {entry.note || "—"}
-                        </span>
-                      </td>
+                      <td className="p-5">{entry.note || "—"}</td>
                       <td className="p-5">
                         <span className="text-sm font-bold text-foreground opacity-70">
                           {new Date(entry.startTime).toLocaleDateString(

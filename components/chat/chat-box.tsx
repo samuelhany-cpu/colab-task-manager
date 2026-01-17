@@ -1,13 +1,31 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  FormEvent,
+  ChangeEvent,
+} from "react";
 
 import { useUser } from "@/components/providers/user-provider";
-import { Send, Hash, User as UserIcon, Loader2, Smile, Reply, MoreHorizontal, Pencil, Trash2, X, ArrowLeft, Search } from "lucide-react";
+import {
+  Send,
+  Hash,
+  User as UserIcon,
+  Loader2,
+  Smile,
+  Reply,
+  Pencil,
+  Trash2,
+  X,
+  ArrowLeft,
+  Search,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
-import { Badge } from "@/components/ui/badge";
 import UserProfileModal from "@/components/users/user-profile-modal";
+import { Badge } from "@/components/ui/badge";
 
 interface Message {
   id: string;
@@ -70,44 +88,74 @@ export default function ChatBox({
     // Supabase Realtime Channel Subscription
     const channelName = activeThread
       ? `thread:${activeThread.id}`
-      : projectId ? `project:${projectId}` : `user:${user.id}`;
+      : projectId
+        ? `project:${projectId}`
+        : `user:${user.id}`;
     const channel = supabase
       .channel(channelName)
       .on("broadcast", { event: "new-message" }, ({ payload }) => {
         const msg = payload as Message;
-        if (!projectId && msg.senderId !== user.id && msg.senderId !== receiverId) return;
+        if (
+          !projectId &&
+          msg.senderId !== user.id &&
+          msg.senderId !== receiverId
+        )
+          return;
         setMessages((prev) => {
-          if (prev.find(m => m.id === msg.id)) return prev;
+          if (prev.find((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
       })
       .on("broadcast", { event: "message-updated" }, ({ payload }) => {
-        setMessages((prev) => prev.map(m => m.id === payload.id ? { ...m, ...payload } : m));
+        setMessages((prev) =>
+          prev.map((m) => (m.id === payload.id ? { ...m, ...payload } : m)),
+        );
       })
       .on("broadcast", { event: "message-deleted" }, ({ payload }) => {
-        setMessages((prev) => prev.filter(m => m.id !== payload.id));
+        setMessages((prev) => prev.filter((m) => m.id !== payload.id));
       })
       .on("broadcast", { event: "reaction-added" }, ({ payload }) => {
-        setMessages((prev) => prev.map(m => m.id === payload.messageId ? {
-          ...m,
-          reactions: [...m.reactions, payload.reaction]
-        } : m));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? {
+                  ...m,
+                  reactions: [...m.reactions, payload.reaction],
+                }
+              : m,
+          ),
+        );
       })
       .on("broadcast", { event: "reaction-removed" }, ({ payload }) => {
-        setMessages((prev) => prev.map(m => m.id === payload.messageId ? {
-          ...m,
-          reactions: m.reactions.filter(r => !(r.userId === payload.userId && r.emoji === payload.emoji))
-        } : m));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.messageId
+              ? {
+                  ...m,
+                  reactions: m.reactions.filter(
+                    (r) =>
+                      !(
+                        r.userId === payload.userId && r.emoji === payload.emoji
+                      ),
+                  ),
+                }
+              : m,
+          ),
+        );
       })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
         const userName = user?.user_metadata?.name || user?.email || "Unknown";
-        const users = Object.values(state).flat().map((p: any) => p.name).filter(name => name !== userName);
+        const users = Object.values(state)
+          .flat()
+          .map((p) => (p as unknown as { name: string }).name)
+          .filter((name) => name !== userName);
         setTypingUsers(users);
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          const userName = user?.user_metadata?.name || user?.email || "Unknown";
+          const userName =
+            user?.user_metadata?.name || user?.email || "Unknown";
           await channel.track({ name: userName, isTyping: false });
         }
       });
@@ -123,13 +171,15 @@ export default function ChatBox({
     }
   }, [messages]);
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = async (e: ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
 
     if (user) {
       const channelName = activeThread
         ? `thread:${activeThread.id}`
-        : projectId ? `project:${projectId}` : `user:${user.id}`;
+        : projectId
+          ? `project:${projectId}`
+          : `user:${user.id}`;
 
       const channel = supabase.channel(channelName);
       const userName = user.user_metadata?.name || user.email || "Unknown";
@@ -141,7 +191,7 @@ export default function ChatBox({
     }
   };
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSend = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
@@ -152,7 +202,9 @@ export default function ChatBox({
       parentId: activeThread?.id,
     };
 
-    const url = editingMessage ? `/api/messages/${editingMessage.id}` : "/api/chat";
+    const url = editingMessage
+      ? `/api/messages/${editingMessage.id}`
+      : "/api/chat";
     const method = editingMessage ? "PATCH" : "POST";
 
     try {
@@ -165,7 +217,9 @@ export default function ChatBox({
       if (res.ok) {
         const newMessage = await res.json();
         if (editingMessage) {
-          setMessages(prev => prev.map(m => m.id === newMessage.id ? newMessage : m));
+          setMessages((prev) =>
+            prev.map((m) => (m.id === newMessage.id ? newMessage : m)),
+          );
           setEditingMessage(null);
         } else {
           setMessages((prev) => {
@@ -182,7 +236,7 @@ export default function ChatBox({
 
   const handleAddReaction = async (messageId: string, emoji: string) => {
     try {
-      const res = await fetch(`/api/messages/${messageId}/reactions`, {
+      await fetch(`/api/messages/${messageId}/reactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emoji }),
@@ -206,7 +260,6 @@ export default function ChatBox({
   const renderContent = (content: string) => {
     // Regex for: @[Name](userId)
     const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
-    const parts = content.split(mentionRegex);
     const result = [];
 
     let lastIndex = 0;
@@ -230,7 +283,7 @@ export default function ChatBox({
           >
             @{match![1]}
           </Badge>
-        </button>
+        </button>,
       );
       lastIndex = mentionRegex.lastIndex;
     }
@@ -264,7 +317,11 @@ export default function ChatBox({
           )}
           <div className="flex flex-col">
             <span className="text-sm">
-              {activeThread ? "Thread" : projectId ? "Project Channel" : "Direct Message"}
+              {activeThread
+                ? "Thread"
+                : projectId
+                  ? "Project Channel"
+                  : "Direct Message"}
             </span>
             {activeThread && (
               <span className="text-[10px] text-muted-foreground font-medium truncate max-w-[200px]">
@@ -286,7 +343,9 @@ export default function ChatBox({
             onClick={() => setShowSearch(!showSearch)}
             className={cn(
               "p-2 rounded-xl transition-all",
-              showSearch ? "bg-primary text-white" : "hover:bg-muted text-muted-foreground"
+              showSearch
+                ? "bg-primary text-white"
+                : "hover:bg-muted text-muted-foreground",
             )}
           >
             <Search size={18} />
@@ -297,7 +356,10 @@ export default function ChatBox({
       {showSearch && (
         <div className="p-3 px-6 border-b border-border bg-muted/20 animate-in slide-in-from-top duration-200">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              size={14}
+            />
             <input
               autoFocus
               placeholder="Search messages..."
@@ -321,140 +383,159 @@ export default function ChatBox({
         className="flex-1 overflow-y-auto p-6 flex flex-col gap-5"
         ref={scrollRef}
       >
-        {messages.filter(msg =>
-          !searchQuery || msg.content.toLowerCase().includes(searchQuery.toLowerCase())
-        ).map((msg) => {
-          const isOwn = msg.senderId === user?.id;
-          const hasReactions = msg.reactions?.length > 0;
+        {messages
+          .filter(
+            (msg) =>
+              !searchQuery ||
+              msg.content.toLowerCase().includes(searchQuery.toLowerCase()),
+          )
+          .map((msg) => {
+            const isOwn = msg.senderId === user?.id;
+            const hasReactions = msg.reactions?.length > 0;
 
-          return (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-3 max-w-[90%] group",
-                isOwn ? "self-end flex-row-reverse" : "self-start",
-              )}
-            >
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center font-semibold text-xs shrink-0 uppercase">
-                {(msg.sender.name || "U")[0]}
-              </div>
-              <div className={cn("flex flex-col gap-1", isOwn && "items-end")}>
-                <div
-                  className={cn(
-                    "flex items-center gap-2",
-                    isOwn && "flex-row-reverse",
-                  )}
-                >
-                  <span className="text-xs font-bold">{msg.sender.name}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(msg.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+            return (
+              <div
+                key={msg.id}
+                className={cn(
+                  "flex gap-3 max-w-[90%] group",
+                  isOwn ? "self-end flex-row-reverse" : "self-start",
+                )}
+              >
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center font-semibold text-xs shrink-0 uppercase">
+                  {(msg.sender.name || "U")[0]}
                 </div>
-
-                <div className="relative group/content">
+                <div
+                  className={cn("flex flex-col gap-1", isOwn && "items-end")}
+                >
                   <div
                     className={cn(
-                      "p-3 px-4 rounded-2xl text-[14px] leading-relaxed break-words",
-                      isOwn
-                        ? "bg-primary text-primary-foreground rounded-tr-none"
-                        : "bg-muted text-foreground rounded-tl-none",
+                      "flex items-center gap-2",
+                      isOwn && "flex-row-reverse",
                     )}
                   >
-                    {renderContent(msg.content)}
+                    <span className="text-xs font-bold">{msg.sender.name}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
                   </div>
 
-                  {/* Actions Menu (on hover) */}
-                  <div className={cn(
-                    "absolute top-0 opacity-0 group-hover/content:opacity-100 transition-opacity flex items-center gap-1 bg-card border border-border rounded-lg shadow-sm p-1 z-10",
-                    isOwn ? "right-full mr-2" : "left-full ml-2"
-                  )}>
-                    <button
-                      className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                      onClick={() => handleAddReaction(msg.id, "👍")}
-                      title="React with 👍"
+                  <div className="relative group/content">
+                    <div
+                      className={cn(
+                        "p-3 px-4 rounded-2xl text-[14px] leading-relaxed break-words",
+                        isOwn
+                          ? "bg-primary text-primary-foreground rounded-tr-none"
+                          : "bg-muted text-foreground rounded-tl-none",
+                      )}
                     >
-                      <Smile size={14} />
-                    </button>
+                      {renderContent(msg.content)}
+                    </div>
+
+                    {/* Actions Menu (on hover) */}
+                    <div
+                      className={cn(
+                        "absolute top-0 opacity-0 group-hover/content:opacity-100 transition-opacity flex items-center gap-1 bg-card border border-border rounded-lg shadow-sm p-1 z-10",
+                        isOwn ? "right-full mr-2" : "left-full ml-2",
+                      )}
+                    >
+                      <button
+                        className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => handleAddReaction(msg.id, "👍")}
+                        title="React with 👍"
+                      >
+                        <Smile size={14} />
+                      </button>
+                      <button
+                        className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setActiveThread(msg)}
+                        title="Reply"
+                      >
+                        <Reply size={14} />
+                      </button>
+                      {isOwn && (
+                        <>
+                          <button
+                            className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => {
+                              setEditingMessage(msg);
+                              setInput(msg.content);
+                            }}
+                            title="Edit"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            className="p-1.5 hover:bg-muted rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/5 rounded-md transition-colors"
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reactions */}
+                  {hasReactions && (
+                    <div
+                      className={cn(
+                        "flex flex-wrap gap-1 mt-1",
+                        isOwn && "justify-end",
+                      )}
+                    >
+                      {Object.entries(
+                        msg.reactions.reduce(
+                          (acc: Record<string, number>, r) => {
+                            acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                            return acc;
+                          },
+                          {},
+                        ),
+                      ).map(([emoji, count]) => {
+                        const reactedByMe = msg.reactions.some(
+                          (r) => r.userId === user?.id && r.emoji === emoji,
+                        );
+                        return (
+                          <button
+                            key={emoji}
+                            onClick={() => handleAddReaction(msg.id, emoji)}
+                            className={cn(
+                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all",
+                              reactedByMe
+                                ? "bg-primary/10 border-primary/30 text-primary"
+                                : "bg-muted border-border text-muted-foreground hover:border-border-hover",
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            <span>{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Reply Count */}
+                  {!activeThread && msg._count?.replies > 0 && (
                     <button
-                      className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
                       onClick={() => setActiveThread(msg)}
-                      title="Reply"
+                      className={cn(
+                        "mt-1 text-[10px] font-bold text-primary hover:underline flex items-center gap-1",
+                        isOwn && "justify-end w-full",
+                      )}
                     >
-                      <Reply size={14} />
+                      <Reply size={10} />
+                      {msg._count.replies}{" "}
+                      {msg._count.replies === 1 ? "reply" : "replies"}
                     </button>
-                    {isOwn && (
-                      <>
-                        <button
-                          className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                          onClick={() => {
-                            setEditingMessage(msg);
-                            setInput(msg.content);
-                          }}
-                          title="Edit"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          className="p-1.5 hover:bg-muted rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/5 rounded-md transition-colors"
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  )}
                 </div>
-
-                {/* Reactions */}
-                {hasReactions && (
-                  <div className={cn("flex flex-wrap gap-1 mt-1", isOwn && "justify-end")}>
-                    {Object.entries(
-                      msg.reactions.reduce((acc: any, r) => {
-                        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([emoji, count]: [string, any]) => {
-                      const reactedByMe = msg.reactions.some(r => r.userId === user?.id && r.emoji === emoji);
-                      return (
-                        <button
-                          key={emoji}
-                          onClick={() => handleAddReaction(msg.id, emoji)}
-                          className={cn(
-                            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all",
-                            reactedByMe
-                              ? "bg-primary/10 border-primary/30 text-primary"
-                              : "bg-muted border-border text-muted-foreground hover:border-border-hover"
-                          )}
-                        >
-                          <span>{emoji}</span>
-                          <span>{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Reply Count */}
-                {!activeThread && msg._count?.replies > 0 && (
-                  <button
-                    onClick={() => setActiveThread(msg)}
-                    className={cn(
-                      "mt-1 text-[10px] font-bold text-primary hover:underline flex items-center gap-1",
-                      isOwn && "justify-end w-full"
-                    )}
-                  >
-                    <Reply size={10} />
-                    {msg._count.replies} {msg._count.replies === 1 ? "reply" : "replies"}
-                  </button>
-                )}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
         {/* Typing Indicators */}
         {typingUsers.length > 0 && (
@@ -464,7 +545,8 @@ export default function ChatBox({
               <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:0.2s]" />
               <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:0.4s]" />
             </div>
-            {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+            {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"}{" "}
+            typing...
           </div>
         )}
       </div>
@@ -474,10 +556,12 @@ export default function ChatBox({
         onSubmit={handleSend}
       >
         <input
-          placeholder={editingMessage ? "Editing message..." : "Type a message..."}
+          placeholder={
+            editingMessage ? "Editing message..." : "Type a message..."
+          }
           className={cn(
             "flex-1 h-11 bg-muted border border-border rounded-xl px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all",
-            editingMessage && "ring-2 ring-primary/20 border-primary"
+            editingMessage && "ring-2 ring-primary/20 border-primary",
           )}
           value={input}
           onChange={handleInputChange}

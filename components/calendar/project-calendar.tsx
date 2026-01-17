@@ -25,13 +25,25 @@ interface ProjectCalendarProps {
   workspaceSlug: string;
 }
 
-function Badge({ children, variant, className }: any) {
+function Badge({
+  children,
+  variant,
+  className,
+}: {
+  children: React.ReactNode;
+  variant?: string;
+  className?: string;
+}) {
   return (
-    <div className={cn(
-      "px-2 py-0.5 rounded-full text-[10px] font-black uppercase border",
-      variant === "outline" ? "border-border text-muted-foreground" : "bg-primary text-primary-foreground border-primary",
-      className
-    )}>
+    <div
+      className={cn(
+        "px-2 py-0.5 rounded-full text-[10px] font-black uppercase border",
+        variant === "outline"
+          ? "border-border text-muted-foreground"
+          : "bg-primary text-primary-foreground border-primary",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -48,7 +60,9 @@ export default function ProjectCalendar({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [view, setView] = useState<"MONTH" | "WEEK" | "DAY">("MONTH");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL");
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<
+    { userId: string; user: { name: string | null; image: string | null } }[]
+  >([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const fetchTasks = useCallback(async () => {
@@ -218,7 +232,9 @@ export default function ProjectCalendar({
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-xl">
-            <span className="text-mutedForeground text-[10px] font-black uppercase tracking-widest">Assignee:</span>
+            <span className="text-mutedForeground text-[10px] font-black uppercase tracking-widest">
+              Assignee:
+            </span>
             <select
               className="bg-transparent border-none text-foreground outline-none text-xs cursor-pointer font-bold"
               value={assigneeFilter}
@@ -226,7 +242,9 @@ export default function ProjectCalendar({
             >
               <option value="ALL">Everyone</option>
               {members.map((m) => (
-                <option key={m.userId} value={m.userId}>{m.user.name}</option>
+                <option key={m.userId} value={m.userId}>
+                  {m.user.name}
+                </option>
               ))}
             </select>
           </div>
@@ -295,17 +313,22 @@ export default function ProjectCalendar({
     const filteredTasks = getFilteredTasks();
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(monthStart);
-    const startDate = view === "MONTH" ? startOfWeek(monthStart) : startOfWeek(currentDate);
-    const endDate = view === "MONTH" ? endOfWeek(monthEnd) : endOfWeek(currentDate);
+    const startDate =
+      view === "MONTH" ? startOfWeek(monthStart) : startOfWeek(currentDate);
+    const endDate =
+      view === "MONTH" ? endOfWeek(monthEnd) : endOfWeek(currentDate);
 
     if (view === "DAY") {
       const dayTasks = filteredTasks.filter(
-        (task) => task.dueDate && isSameDay(parseISO(task.dueDate), currentDate),
+        (task) =>
+          task.dueDate && isSameDay(parseISO(task.dueDate), currentDate),
       );
       return (
         <div className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-soft p-4 min-h-[400px]">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-black">{format(currentDate, "EEEE, MMMM d")}</h3>
+            <h3 className="text-lg font-black">
+              {format(currentDate, "EEEE, MMMM d")}
+            </h3>
             <Badge variant="outline">{dayTasks.length} Tasks</Badge>
           </div>
           <div className="grid grid-cols-1 gap-3">
@@ -317,7 +340,10 @@ export default function ProjectCalendar({
                 setIsModalOpen(true);
               }}
             >
-              <Plus size={24} className="group-hover:scale-110 transition-transform" />
+              <Plus
+                size={24}
+                className="group-hover:scale-110 transition-transform"
+              />
               <span className="font-bold">Add Task for Today</span>
             </button>
           </div>
@@ -343,7 +369,9 @@ export default function ProjectCalendar({
             onDrop={(e) => onDrop(e, cloneDay)}
             className={cn(
               "relative min-h-[140px] border-r border-b border-border/50 p-2 transition-all hover:bg-muted/30 group",
-              view === "MONTH" && !isSameMonth(day, monthStart) && "bg-muted/10 opacity-40 grayscale-[0.5]",
+              view === "MONTH" &&
+                !isSameMonth(day, monthStart) &&
+                "bg-muted/10 opacity-40 grayscale-[0.5]",
               isToday(day) && "bg-primary/5",
             )}
           >
