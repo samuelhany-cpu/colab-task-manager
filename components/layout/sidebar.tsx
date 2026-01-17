@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { type User } from "@supabase/supabase-js";
+import { useUser } from "@/components/providers/user-provider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -22,44 +22,30 @@ import { cn } from "@/lib/cn";
 export default function Sidebar({ workspaceSlug }: { workspaceSlug: string }) {
   const pathname = usePathname();
   const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
   const [collapsed, setCollapsed] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, [supabase]);
-
-  useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchSidebarData = async () => {
       try {
-        const wsRes = await fetch("/api/workspaces");
-        if (wsRes.ok) {
-          const workspaces = await wsRes.json();
+        const res = await fetch("/api/workspaces?includeProjects=true");
+        if (res.ok) {
+          const workspaces = await res.json();
           const workspace = workspaces.find(
             (w: { id: string; slug: string }) => w.slug === workspaceSlug,
           );
 
-          if (workspace) {
-            const pRes = await fetch(
-              `/api/projects?workspaceId=${workspace.id}`,
-            );
-            const pData = await pRes.json();
-            setProjects(pData);
+          if (workspace && workspace.projects) {
+            setProjects(workspace.projects);
           }
         }
       } catch (e: unknown) {
-        console.error(e);
+        console.error("Sidebar fetch error:", e);
       }
     };
 
-    if (workspaceSlug) fetchProjects();
+    if (workspaceSlug) fetchSidebarData();
   }, [workspaceSlug]);
 
   const navItems = [

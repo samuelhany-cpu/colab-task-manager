@@ -16,25 +16,17 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import TaskModal from "./task-modal";
+import { Task } from "@/types/task";
 
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: "TODO" | "IN_PROGRESS" | "DONE";
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-  dueDate?: string;
-  assignee?: {
-    id: string;
-    name: string | null;
-    email: string | null;
-    image?: string | null;
-  };
-  _count: { comments: number };
-}
-
-export default function KanbanBoard({ projectId }: { projectId: string }) {
+export default function KanbanBoard({
+  projectId,
+  workspaceSlug,
+}: {
+  projectId: string;
+  workspaceSlug: string;
+}) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  // ... (rest of states remain same)
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [initialStatus, setInitialStatus] = useState<Task["status"]>("TODO");
@@ -46,6 +38,8 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
     null,
   );
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
+
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -110,7 +104,14 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
   const handleAddTask = (status: Task["status"] = "TODO") => {
     setInitialStatus(status);
+    setEditingTask(null);
     setIsModalOpen(true);
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+    setOpenMenuTaskId(null);
   };
 
   const handleDragStart = (e: React.DragEvent, task: Task) => {
@@ -171,19 +172,26 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("Are you sure you want to delete this task?")) return;
 
+    // Optimistic update
+    const previousTasks = [...tasks];
+    setTasks(tasks.filter((t) => t.id !== taskId));
+    setOpenMenuTaskId(null);
+
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: "DELETE",
       });
 
-      if (res.ok) {
-        setTasks(tasks.filter((t) => t.id !== taskId));
+      if (!res.ok) {
+        // Revert on error
+        setTasks(previousTasks);
+        alert("Failed to delete task");
       }
     } catch (error) {
       console.error("Failed to delete task:", error);
+      setTasks(previousTasks);
       alert("Failed to delete task");
     }
-    setOpenMenuTaskId(null);
   };
 
   const toggleMenu = (e: React.MouseEvent, taskId: string) => {
@@ -365,7 +373,7 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setOpenMenuTaskId(null);
+                                handleEditTask(task);
                               }}
                             >
                               <Edit size={14} />
@@ -386,6 +394,24 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                         )}
                       </div>
                     </div>
+                    {/* Tags Display */}
+                    {task.tags && task.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {task.tags.map((tag) => (
+                          <div
+                            key={tag.id}
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-current/20 flex items-center"
+                            style={{
+                              color: tag.color,
+                              backgroundColor: `${tag.color}10`,
+                            }}
+                          >
+                            {tag.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <h4 className="text-[15px] font-semibold mb-4 leading-normal">
                       {task.title}
                     </h4>
@@ -400,7 +426,7 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                       )}
                       <div className="flex items-center gap-1.5">
                         <MessageCircle size={12} />
-                        <span>{task._count.comments}</span>
+                        <span>{task._count?.comments || 0}</span>
                       </div>
                       <div className="ml-auto">
                         {task.assignee ? (
@@ -447,10 +473,36 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
       <TaskModal
         projectId={projectId}
+        workspaceSlug={workspaceSlug}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialStatus={initialStatus}
-        onTaskCreated={() => fetchTasks()}
+        task={editingTask}
+        onTaskCreated={(newTask) => {
+          if (newTask) {
+            const taskWithDefaults: Task = {
+              ...newTask,
+              tags: newTask.tags || [],
+              _count: newTask._count || { comments: 0 },
+            };
+            setTasks((prev) => [...prev, taskWithDefaults]);
+          } else {
+            fetchTasks();
+          }
+        }}
+        onTaskUpdated={(updatedTask) => {
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === updatedTask.id
+                ? ({
+                    ...updatedTask,
+                    tags: updatedTask.tags || [],
+                    _count: t._count,
+                  } as Task)
+                : t,
+            ),
+          );
+        }}
       />
     </div>
   );

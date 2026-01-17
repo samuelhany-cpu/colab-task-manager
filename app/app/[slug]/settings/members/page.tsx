@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import type { User } from "@supabase/supabase-js";
 import {
   Users,
   UserPlus,
@@ -14,7 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { useUser } from "@/components/providers/user-provider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,18 +36,8 @@ export default function MembersPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
 
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, [supabase]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);

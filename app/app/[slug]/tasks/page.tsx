@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, use, useCallback } from "react";
-import type { User } from "@supabase/supabase-js";
+import { useUser } from "@/components/providers/user-provider";
 import { createClient } from "@/lib/supabase/client";
 import {
   CheckSquare,
@@ -37,17 +36,7 @@ export default function MyTasksPage({
 }) {
   const { slug } = use(params);
   const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, [supabase]);
+  const { user } = useUser();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);

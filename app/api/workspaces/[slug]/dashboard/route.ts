@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
 import { prisma } from "@/lib/prisma";
+import { startOfDay, endOfDay, addDays } from "date-fns";
 
 export async function GET(
   req: Request,
@@ -19,7 +19,7 @@ export async function GET(
       where: { slug },
       include: {
         projects: {
-          select: { id: true },
+          select: { id: true, name: true },
         },
         members: {
           select: { id: true },
@@ -46,56 +46,106 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Fetch stats
     const projectIds = workspace.projects.map((p) => p.id);
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const todayEnd = endOfDay(now);
+    const sevenDaysLater = endOfDay(addDays(now, 7));
 
-    const taskCount = await prisma.task.count({
-      where: {
-        projectId: { in: projectIds },
-      },
-    });
-
-    const timeEntries = await prisma.timeEntry.findMany({
-      where: {
-        task: {
-          projectId: { in: projectIds },
+    // Parallelize queries for efficiency
+    const [
+      taskCount,
+      timeEntries,
+      activities,
+      todaysTasks,
+      overdueTasks,
+      upcomingTasks,
+      activeTimer,
+      statusCounts,
+    ] = await Promise.all([
+      prisma.task.count({ where: { projectId: { in: projectIds } } }),
+      prisma.timeEntry.findMany({
+        where: { task: { projectId: { in: projectIds } } },
+        select: { duration: true },
+      }),
+      prisma.activity.findMany({
+        where: { task: { projectId: { in: projectIds } } },
+        include: {
+          user: { select: { name: true, image: true } },
+          task: {
+            select: {
+              title: true,
+              project: { select: { name: true } },
+            },
+          },
         },
-      },
-      select: {
-        duration: true,
-      },
-    });
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      prisma.task.findMany({
+        where: {
+          projectId: { in: projectIds },
+          assigneeId: user.id,
+          dueDate: { gte: todayStart, lte: todayEnd },
+          status: { not: "DONE" },
+        },
+        select: { id: true, title: true, status: true, priority: true },
+        take: 5,
+      }),
+      prisma.task.findMany({
+        where: {
+          projectId: { in: projectIds },
+          assigneeId: user.id,
+          dueDate: { lt: todayStart },
+          status: { not: "DONE" },
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+        },
+        take: 5,
+      }),
+      prisma.task.findMany({
+        where: {
+          projectId: { in: projectIds },
+          assigneeId: user.id,
+          dueDate: { gt: todayEnd, lte: sevenDaysLater },
+          status: { not: "DONE" },
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+        },
+        take: 5,
+      }),
+      prisma.timer.findUnique({
+        where: { userId: user.id },
+        include: { task: { select: { title: true } } },
+      }),
+      prisma.task.groupBy({
+        by: ["status"],
+        where: { projectId: { in: projectIds } },
+        _count: { _all: true },
+      }),
+    ]);
 
     const totalHours = timeEntries.reduce(
       (acc, curr) => acc + curr.duration / 3600,
       0,
     );
 
-    // Fetch recent activity
-    const activities = await prisma.activity.findMany({
-      where: {
-        task: {
-          projectId: { in: projectIds },
-        },
-      },
-      include: {
-        user: {
-          select: { name: true, image: true },
-        },
-        task: {
-          select: {
-            title: true,
-            project: {
-              select: { name: true },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 10,
-    });
+    const taskStatusStats = {
+      TODO: statusCounts.find((s) => s.status === "TODO")?._count._all || 0,
+      IN_PROGRESS:
+        statusCounts.find((s) => s.status === "IN_PROGRESS")?._count._all || 0,
+      DONE: statusCounts.find((s) => s.status === "DONE")?._count._all || 0,
+    };
 
     return NextResponse.json({
       stats: {
@@ -104,6 +154,18 @@ export async function GET(
         members: workspace.members.length,
         hours: Math.round(totalHours * 10) / 10,
       },
+      todaysTasks,
+      overdueTasks,
+      upcomingTasks,
+      activeTimer: activeTimer
+        ? {
+            ...activeTimer,
+            duration: Math.floor(
+              (now.getTime() - activeTimer.startTime.getTime()) / 1000,
+            ),
+          }
+        : null,
+      taskStatusStats,
       recentActivity: activities.map((a) => ({
         id: a.id,
         user: a.user.name || "Unknown",

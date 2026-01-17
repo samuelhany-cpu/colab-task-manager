@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import type { User } from "@supabase/supabase-js";
+import { useUser } from "@/components/providers/user-provider";
 import { Send, Hash, User as UserIcon, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
@@ -22,21 +21,11 @@ export default function ChatBox({
   receiverId?: string;
 }) {
   const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const initAuth = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    initAuth();
-  }, [supabase]);
 
   useEffect(() => {
     const fetchMessages = async () => {

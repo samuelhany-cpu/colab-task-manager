@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { type User } from "@supabase/supabase-js";
+import { useUser } from "@/components/providers/user-provider";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Bell, BellOff, Check, Trash2, Loader2 } from "lucide-react";
@@ -25,7 +25,7 @@ export default function NotificationDropdown() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
 
   // Fetch notifications
   const fetchNotifications = async () => {
@@ -50,15 +50,6 @@ export default function NotificationDropdown() {
   }, [filter]);
 
   // Setup Supabase Realtime for notifications
-  useEffect(() => {
-    const initAuth = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    initAuth();
-  }, [supabase]);
 
   useEffect(() => {
     if (!user) return;

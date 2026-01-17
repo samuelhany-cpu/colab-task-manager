@@ -38,12 +38,15 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const supabase = createClient();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Removed unused password state
   const [showOtp, setShowOtp] = useState(false);
-  const [authMode, setAuthMode] = useState<"otp" | "password">("otp");
+  const [authMode, setAuthMode] = useState<
+    "otp" | "password" | "forgot-password"
+  >("otp");
 
   useEffect(() => {
     if (searchParams.get("registered")) {
@@ -53,8 +56,10 @@ function LoginForm() {
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     const formData = new FormData(e.currentTarget);
     const emailValue = formData.get("email") as string;
@@ -89,6 +94,7 @@ function LoginForm() {
 
   const handleVerifyOtp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
 
@@ -115,6 +121,31 @@ function LoginForm() {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    const formData = new FormData(e.currentTarget);
+    const emailValue = formData.get("email") as string;
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(emailValue, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
+      });
+      if (error) throw error;
+      setSuccess("Check your email for the password reset link.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to send reset email",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6 relative overflow-hidden">
       {/* Decorative Orbs */}
@@ -128,25 +159,44 @@ function LoginForm() {
           </div>
           <div className="space-y-1">
             <h1 className="text-3xl font-black tracking-tight text-foreground">
-              {showOtp ? "Verify Identity" : "Welcome Back"}
+              {showOtp
+                ? "Verify Identity"
+                : authMode === "forgot-password"
+                  ? "Reset Password"
+                  : "Welcome Back"}
             </h1>
             <p className="text-mutedForeground font-medium">
               {showOtp
                 ? `Enter the code sent to ${email}`
-                : "Continue your high-intensity work."}
+                : authMode === "forgot-password"
+                  ? "Enter your email to receive recovery instructions."
+                  : "Continue your high-intensity work."}
             </p>
           </div>
         </div>
 
-        {registered && !showOtp && (
+        {registered && !showOtp && !success && (
           <div className="flex items-center gap-3 p-4 bg-green-500/10 text-green-600 border border-green-500/20 rounded-xl text-sm font-bold">
             <CheckCircle size={18} />
             Registration successful! Please sign in.
           </div>
         )}
 
+        {success && (
+          <div className="flex items-center gap-3 p-4 bg-green-500/10 text-green-600 border border-green-500/20 rounded-xl text-sm font-bold">
+            <CheckCircle size={18} />
+            {success}
+          </div>
+        )}
+
         <form
-          onSubmit={showOtp ? handleVerifyOtp : handleSignIn}
+          onSubmit={
+            showOtp
+              ? handleVerifyOtp
+              : authMode === "forgot-password"
+                ? handleResetPassword
+                : handleSignIn
+          }
           className="space-y-6"
         >
           {error && (
@@ -155,7 +205,7 @@ function LoginForm() {
             </div>
           )}
 
-          {!showOtp && (
+          {!showOtp && authMode !== "forgot-password" && (
             <div className="flex p-1 bg-muted/50 rounded-xl border border-border/40 mb-2">
               <button
                 type="button"
@@ -211,9 +261,18 @@ function LoginForm() {
 
                 {authMode === "password" && (
                   <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
-                    <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
-                      Password
-                    </label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-black uppercase tracking-widest text-mutedForeground ml-1">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("forgot-password")}
+                        className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                     <div className="relative group">
                       <Lock
                         className="absolute left-4 top-1/2 -translate-y-1/2 text-mutedForeground group-focus-within:text-primary transition-colors"
@@ -263,27 +322,43 @@ function LoginForm() {
             )}
           </div>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
-          >
-            {loading ? (
-              <Loader2 className="animate-spin" size={20} />
-            ) : (
-              <>
-                {showOtp
-                  ? "Verify Code"
-                  : authMode === "otp"
-                    ? "Send OTP"
-                    : "Sign In"}
-                <ArrowRight
-                  size={20}
-                  className="group-hover:translate-x-1 transition-transform"
-                />
-              </>
+          <div className="space-y-4">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
+            >
+              {loading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>
+                  {showOtp
+                    ? "Verify Code"
+                    : authMode === "forgot-password"
+                      ? "Send Reset Link"
+                      : authMode === "otp"
+                        ? "Send OTP"
+                        : "Sign In"}
+                  <ArrowRight
+                    size={20}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                </>
+              )}
+            </Button>
+
+            {authMode === "forgot-password" && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={loading}
+                onClick={() => setAuthMode("password")}
+                className="w-full h-12 rounded-xl font-bold text-mutedForeground hover:text-foreground"
+              >
+                Back to Sign In
+              </Button>
             )}
-          </Button>
+          </div>
         </form>
 
         <div className="text-center">

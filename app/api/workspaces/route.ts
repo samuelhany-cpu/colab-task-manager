@@ -11,7 +11,9 @@ const workspaceSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
 });
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const includeProjects = searchParams.get("includeProjects") === "true";
   const user = await getCurrentUser();
 
   if (!user) {
@@ -39,6 +41,16 @@ export async function GET() {
           },
         },
       },
+      ...(includeProjects
+        ? {
+            projects: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          }
+        : {}),
     },
     orderBy: {
       createdAt: "desc",

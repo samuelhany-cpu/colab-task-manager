@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const supabase = await createClient();
 
     // 1. Handle Redundancy: Check if user already exists
-    const { exists, message } = await checkUserRedundancy(email);
+    const { exists } = await checkUserRedundancy(email);
 
     if (exists) {
       return NextResponse.json(
@@ -43,6 +43,13 @@ export async function POST(req: Request) {
     if (authError) {
       return NextResponse.json({ error: authError.message }, { status: 400 });
     }
+    // The provided `catch` block is syntactically incorrect here as it cannot follow an `if` statement directly.
+    // Assuming the intent was to add more robust error handling around the signup process,
+    // but without a `try` block preceding it, this `catch` block cannot be placed here.
+    // The outer `try...catch` already handles general exceptions.
+    // For now, I will not insert the `catch` block as it would break syntax.
+    // If the intent was to replace the `if (authError)` with a `try...catch` around `supabase.auth.signUp`,
+    // that would require a different structural change.
 
     if (!authData.user) {
       return NextResponse.json(

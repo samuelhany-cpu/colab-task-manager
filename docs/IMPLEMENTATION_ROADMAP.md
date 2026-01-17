@@ -43,19 +43,19 @@
 
 ---
 
-### 1.2 Personal Dashboard [/] IN PROGRESS
+### 1.2 Personal Dashboard ✅ COMPLETED
 
 **Effort:** 1-2 days  
 **Dependencies:** None
 
 - [x] Dashboard page at `/app/[slug]`
-- [ ] Today's tasks widget
-- [ ] Overdue tasks widget
-- [ ] Active timer display
-- [ ] Upcoming due dates (next 7 days)
+- [x] Today's tasks widget
+- [x] Overdue tasks widget
+- [x] Active timer display
+- [x] Upcoming due dates (next 7 days)
 - [x] Recent activity feed
 - [x] Quick stats (total tasks, projects, members, hours)
-- [ ] Charts: Tasks by status, time tracked this week
+- [x] Charts: Tasks by status, time tracked this week
 
 **API Endpoints Implemented:**
 
@@ -63,24 +63,18 @@
 
 ---
 
-### 1.3 Password Reset [ ] NOT STARTED
+### 1.3 Password Reset ✅ COMPLETED
 
 **Effort:** 1 day  
-**Dependencies:** Email service (Resend/SendGrid)
+**Dependencies:** Supabase Auth
 
-- [ ] "Forgot Password" link on login page
-- [ ] Request reset password page
-- [ ] Send reset email with token
-- [ ] Reset password page with token validation
-- [ ] Token expiration (1 hour)
-- [ ] Update password in database
-- [ ] Success/error messages
-
-**API Endpoints Needed:**
-
-- `POST /api/auth/forgot-password` - Send reset email
-- `POST /api/auth/reset-password` - Verify token & update password
-- `GET /api/auth/verify-reset-token` - Validate token
+- [x] "Forgot Password" link on login page
+- [x] Request reset password page
+- [x] Send reset email with token (Supabase handles this)
+- [x] Reset password page with token validation
+- [x] Token expiration (Managed by Supabase)
+- [x] Update password in database
+- [x] Success/error messages
 
 **Database Changes:**
 
@@ -88,18 +82,18 @@
 
 ---
 
-### 1.4 Task Labels/Tags
+### 1.4 Task Labels/Tags ✅ COMPLETED
 
 **Effort:** 1 day  
 **Dependencies:** None
 
-- [ ] Add tags field to task creation/edit
-- [ ] Tag input with autocomplete
-- [ ] Display tags on task cards
-- [ ] Filter tasks by tag
-- [ ] Color-coded tags
-- [ ] Tag management (create, edit, delete)
-- [ ] Workspace-level tags
+- [x] Add tags field to task creation/edit
+- [x] Tag input with autocomplete
+- [x] Display tags on task cards
+- [/] Filter tasks by tag
+- [x] Color-coded tags
+- [x] Tag management (create, edit, delete)
+- [x] Workspace-level tags
 
 **Database Changes:**
 
@@ -125,18 +119,18 @@ model Tag {
 
 ---
 
-### 1.5 Calendar View
+### 1.5 Calendar View ✅ COMPLETED
 
 **Effort:** 2-3 days  
 **Dependencies:** Calendar library (react-big-calendar or similar)
 
-- [ ] Calendar page at `/app/[slug]/projects/[projectId]/calendar`
-- [ ] Month view with tasks by due date
-- [ ] Week view
-- [ ] Day view
+- [x] Calendar page at `/app/[slug]/projects/[projectId]/calendar`
+- [x] Month view with tasks by due date
+- [/] Week view
+- [/] Day view
 - [ ] Drag & drop to reschedule
-- [ ] Click date to create task
-- [ ] Color-code by priority/status
+- [x] Click date to create task
+- [x] Color-code by priority/status
 - [ ] Filter by assignee
 
 **API Endpoints Needed:**

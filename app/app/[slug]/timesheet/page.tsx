@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import type { User } from "@supabase/supabase-js";
+import { useUser } from "@/components/providers/user-provider";
 import {
   Clock,
   Plus,
@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   Loader2,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,18 +36,8 @@ export default function TimesheetPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
 
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, [supabase]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);

@@ -12,6 +12,7 @@ const taskSchema = z.object({
   dueDate: z.string().optional().nullable(),
   projectId: z.string().min(1, "Project ID is required"),
   assigneeId: z.string().optional().nullable(),
+  tagIds: z.array(z.string()).optional(),
 });
 
 export async function GET(req: Request) {
@@ -47,6 +48,9 @@ export async function GET(req: Request) {
       assignee: {
         select: { id: true, name: true, email: true, image: true },
       },
+      tags: {
+        select: { id: true, name: true, color: true },
+      },
       _count: {
         select: { comments: true },
       },
@@ -64,17 +68,18 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const data = taskSchema.parse(body);
+    const { tagIds, ...data } = taskSchema.parse(body);
 
-    // Check project membership
-    const membership = await prisma.projectMember.findFirst({
-      where: {
-        projectId: data.projectId,
-        userId: user.id,
+    // Check project membership and get workspace slug
+    const project = await prisma.project.findUnique({
+      where: { id: data.projectId },
+      include: {
+        members: { where: { userId: user.id } },
+        workspace: { select: { slug: true } },
       },
     });
 
-    if (!membership) {
+    if (!project || project.members.length === 0) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -92,15 +97,14 @@ export async function POST(req: Request) {
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         creatorId: user.id,
         position,
+        tags: tagIds
+          ? {
+              connect: tagIds.map((id) => ({ id })),
+            }
+          : undefined,
       },
       include: {
-        project: {
-          include: {
-            workspace: {
-              select: { slug: true },
-            },
-          },
-        },
+        tags: true,
       },
     });
 
@@ -130,7 +134,7 @@ export async function POST(req: Request) {
           task.title,
           task.id,
           task.projectId,
-          task.project.workspace.slug,
+          project.workspace.slug,
         );
       } catch (notificationError) {
         console.error("Failed to send notification:", notificationError);
@@ -165,7 +169,7 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const task = await prisma.task.findUnique({
       where: { id: taskId },
-      include: { project: true },
+      include: { project: true, tags: true },
     });
 
     if (!task) {
@@ -184,8 +188,11 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Handle position update Specifically
-    if (body.position !== undefined || body.status !== undefined) {
+    // Handle position/status update Specifically (e.g. drag & drop)
+    if (
+      (body.position !== undefined || body.status !== undefined) &&
+      body.tagIds === undefined
+    ) {
       const updatedTask = await prisma.task.update({
         where: { id: taskId },
         data: {
@@ -217,7 +224,8 @@ export async function PATCH(req: Request) {
       return NextResponse.json(updatedTask);
     }
 
-    const updateData = taskSchema.partial().parse(body);
+    const { tagIds, ...updateData } = taskSchema.partial().parse(body);
+
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
       data: {
@@ -228,6 +236,17 @@ export async function PATCH(req: Request) {
             : updateData.dueDate
               ? new Date(updateData.dueDate)
               : undefined,
+        tags: tagIds
+          ? {
+              set: tagIds.map((id) => ({ id })),
+            }
+          : undefined,
+      },
+      include: {
+        tags: true,
+        assignee: {
+          select: { id: true, name: true, email: true, image: true },
+        },
       },
     });
 

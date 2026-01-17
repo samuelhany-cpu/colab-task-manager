@@ -1,13 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next") ?? "/app";
+  const { origin } = requestUrl;
 
   if (code) {
-    const { origin } = new URL(request.url);
     const response = NextResponse.redirect(`${origin}${next}`);
 
     const supabase = createServerClient(
@@ -35,39 +36,48 @@ export async function GET(request: NextRequest) {
 
     if (!error && supabaseUser) {
       // Sync with Prisma
-      const { prisma } = await import("@/lib/prisma");
-
-      const user = await prisma.user.findFirst({
-        where: {
-          OR: [{ supabaseId: supabaseUser.id }, { email: supabaseUser.email }],
-        },
-      });
-
-      if (!user) {
-        // Create new user if they don't exist
-        await prisma.user.create({
-          data: {
-            supabaseId: supabaseUser.id,
-            email: supabaseUser.email,
-            name:
-              supabaseUser.user_metadata?.full_name ||
-              supabaseUser.email?.split("@")[0],
+      try {
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { supabaseId: supabaseUser.id },
+              { email: supabaseUser.email },
+            ],
           },
         });
-      } else if (!user.supabaseId) {
-        // Link existing user by email
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { supabaseId: supabaseUser.id },
-        });
-      }
 
-      return response;
+        if (!user) {
+          // Create new user if they don't exist
+          await prisma.user.create({
+            data: {
+              supabaseId: supabaseUser.id,
+              email: supabaseUser.email,
+              name:
+                supabaseUser.user_metadata?.full_name ||
+                supabaseUser.email?.split("@")[0],
+            },
+          });
+        } else if (!(user as { supabaseId?: string | null }).supabaseId) {
+          // Link if supabaseId is missing
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              supabaseId: supabaseUser.id,
+            },
+          });
+        }
+
+        return response;
+      } catch (syncError: unknown) {
+        console.error("Prisma Sync Error:", syncError);
+        // Still proceed with the response since the user is authenticated in Supabase
+        return response;
+      }
     }
   }
 
   // return the user to an error page with instructions
   return NextResponse.redirect(
-    `${requestUrl.origin}/login?error=Could not authenticate user`,
+    `${origin}/login?error=Could not authenticate user`,
   );
 }

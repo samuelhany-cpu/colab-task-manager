@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -44,6 +45,7 @@ model Workspace {
 
   members  WorkspaceMember[]
   projects Project[]
+  tags     Tag[]
 }
 
 model WorkspaceMember {
@@ -120,6 +122,19 @@ model Task {
   timeEntries TimeEntry[]
   timers      Timer[]
   files       File[]
+  tags        Tag[]
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  name        String
+  color       String    @default("#3b82f6")
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, name])
 }
 
 enum TaskStatus {

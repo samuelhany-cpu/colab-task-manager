@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import type { User } from "@supabase/supabase-js";
+import { useUser } from "@/components/providers/user-provider";
 import {
   Activity as ActivityIcon,
   Clock,
@@ -11,7 +11,6 @@ import {
   Filter,
 } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,18 +31,8 @@ export default function ActivityPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const supabase = createClient();
-  const [user, setUser] = useState<User | null>(null);
+  const { user } = useUser();
 
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, [supabase]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 

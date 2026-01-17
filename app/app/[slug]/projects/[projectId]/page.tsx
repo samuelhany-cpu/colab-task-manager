@@ -3,6 +3,7 @@
 import { use, useState, useEffect } from "react";
 import KanbanBoard from "@/components/board/kanban-board";
 import ProjectMembers from "@/components/project/project-members";
+import ProjectCalendar from "@/components/calendar/project-calendar";
 import {
   Users,
   LayoutGrid,
@@ -10,6 +11,7 @@ import {
   Loader2,
   Settings,
   Star,
+  Calendar,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -26,7 +28,9 @@ export default function ProjectPage({
   params: Promise<{ slug: string; projectId: string }>;
 }) {
   const { slug, projectId } = use(params);
-  const [activeTab, setActiveTab] = useState<"board" | "members">("board");
+  const [activeTab, setActiveTab] = useState<"board" | "members" | "calendar">(
+    "board",
+  );
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -140,6 +144,22 @@ export default function ProjectPage({
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("calendar")}
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "calendar"
+                  ? "text-primary"
+                  : "text-mutedForeground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Calendar size={14} />
+                Calendar
+              </div>
+              {activeTab === "calendar" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -148,7 +168,9 @@ export default function ProjectPage({
         <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
           <div className="max-w-7xl mx-auto h-full">
             {activeTab === "board" ? (
-              <KanbanBoard projectId={projectId} />
+              <KanbanBoard projectId={projectId} workspaceSlug={slug} />
+            ) : activeTab === "calendar" ? (
+              <ProjectCalendar projectId={projectId} workspaceSlug={slug} />
             ) : (
               <ProjectMembers projectId={projectId} />
             )}
