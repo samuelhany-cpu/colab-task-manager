@@ -22,7 +22,7 @@ import { Search } from "lucide-react";
 
 export default function Sidebar({
   workspaceSlug,
-  onSearchClick
+  onSearchClick,
 }: {
   workspaceSlug: string;
   onSearchClick?: () => void;
@@ -115,12 +115,22 @@ export default function Sidebar({
               className={cn(
                 "mx-3 px-4 py-3 flex items-center justify-between rounded-xl text-mutedForeground group transition-all duration-300 relative overflow-hidden",
                 "hover:bg-primary/10 hover:text-primary hover:translate-x-1",
-                collapsed && "justify-center px-0 hover:scale-110"
+                collapsed && "justify-center px-0 hover:scale-110",
               )}
             >
-              <div className={cn("flex items-center gap-4 z-10", collapsed && "gap-0")}>
-                <Search size={20} className="group-hover:scale-110 transition-transform" />
-                {!collapsed && <span className="text-[15px] font-medium">Search</span>}
+              <div
+                className={cn(
+                  "flex items-center gap-4 z-10",
+                  collapsed && "gap-0",
+                )}
+              >
+                <Search
+                  size={20}
+                  className="group-hover:scale-110 transition-transform"
+                />
+                {!collapsed && (
+                  <span className="text-[15px] font-medium">Search</span>
+                )}
               </div>
               {!collapsed && (
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted border border-border text-[9px] font-black group-hover:bg-primary/20 transition-colors">
@@ -138,7 +148,7 @@ export default function Sidebar({
                     "px-4 py-3 flex items-center justify-between rounded-xl text-mutedForeground no-underline transition-all duration-300 relative overflow-hidden group",
                     "hover:bg-muted hover:text-foreground hover:translate-x-1",
                     isActive &&
-                    "bg-primary/5 text-primary hover:translate-x-1 font-semibold",
+                      "bg-primary/5 text-primary hover:translate-x-1 font-semibold",
                     collapsed && "justify-center px-0 hover:scale-110",
                   )}
                 >
@@ -272,7 +282,7 @@ export default function Sidebar({
           ) : (
             <div className="flex justify-center relative pb-2">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white bg-gradient-to-br from-primary to-blue-600 shadow-soft">
-                {user?.email?.[0]?.toUpperCase() || "U"}
+                {user?.email?.[0]?.toUpperCase() || "U"}P
               </div>
               <div className="absolute bottom-2 right-5 w-3 h-3 rounded-full border-2 border-card bg-green-500" />
             </div>

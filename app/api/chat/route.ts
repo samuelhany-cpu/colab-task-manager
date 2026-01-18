@@ -5,76 +5,130 @@ import { z } from "zod";
 
 const messageSchema = z.object({
   content: z.string().min(1),
+  workspaceId: z.string().optional(),
   projectId: z.string().optional(),
   receiverId: z.string().optional(),
   parentId: z.string().optional(),
 });
 
 export async function GET(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get("projectId");
-  const receiverId = searchParams.get("receiverId");
-  const parentId = searchParams.get("parentId");
+    const { searchParams } = new URL(req.url);
+    const workspaceId = searchParams.get("workspaceId")?.trim() || null;
+    const projectId = searchParams.get("projectId")?.trim() || null;
+    const receiverId = searchParams.get("receiverId")?.trim() || null;
+    const parentId = searchParams.get("parentId")?.trim() || null;
 
-  const include = {
-    sender: { select: { id: true, name: true, image: true } },
-    reactions: {
-      include: {
-        user: { select: { id: true, name: true } },
+    if (!workspaceId && !projectId && !receiverId && !parentId) {
+      return NextResponse.json({ error: "Context required" }, { status: 400 });
+    }
+
+    const include = {
+      sender: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+        },
       },
-    },
-    _count: {
-      select: {
-        replies: true,
+      reactions: {
+        select: {
+          id: true,
+          emoji: true,
+          userId: true,
+          createdAt: true,
+        },
       },
-    },
-  };
+      _count: {
+        select: {
+          replies: true,
+        },
+      },
+    };
 
-  if (parentId) {
-    const messages = await prisma.message.findMany({
-      where: { parentId },
-      include,
-      orderBy: { createdAt: "asc" },
-    });
-    return NextResponse.json(messages);
-  }
+    const orderBy = { createdAt: "asc" as const };
+    const take = 50;
 
-  if (projectId) {
-    const messages = await prisma.message.findMany({
-      where: { projectId, parentId: null },
-      include,
-      orderBy: { createdAt: "asc" },
-      take: 50,
-    });
-    return NextResponse.json(messages);
-  }
+    if (parentId) {
+      const messages = await prisma.message.findMany({
+        where: { parentId },
+        include,
+        orderBy,
+      });
+      return NextResponse.json(messages);
+    }
 
-  if (receiverId) {
-    const currentUserId = user.id;
-    const messages = await prisma.message.findMany({
-      where: {
-        AND: [
-          { parentId: null },
-          {
-            OR: [
-              { senderId: currentUserId, receiverId },
-              { senderId: receiverId, receiverId: currentUserId },
-            ],
+    if (workspaceId) {
+      // Verify user is a member of the workspace
+      const membership = await prisma.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId: user.id,
           },
-        ],
-      },
-      include,
-      orderBy: { createdAt: "asc" },
-      take: 50,
-    });
-    return NextResponse.json(messages);
-  }
+        },
+        select: { id: true }, // Only select ID for existence check
+      });
 
-  return NextResponse.json({ error: "Context required" }, { status: 400 });
+      if (!membership) {
+        return NextResponse.json(
+          { error: "Not a workspace member" },
+          { status: 403 },
+        );
+      }
+
+      const messages = await prisma.message.findMany({
+        where: { workspaceId, parentId: null },
+        include,
+        orderBy,
+        take,
+      });
+      return NextResponse.json(messages);
+    }
+
+    if (projectId) {
+      const messages = await prisma.message.findMany({
+        where: { projectId, parentId: null },
+        include,
+        orderBy,
+        take,
+      });
+      return NextResponse.json(messages);
+    }
+
+    if (receiverId) {
+      const currentUserId = user.id;
+      const messages = await prisma.message.findMany({
+        where: {
+          AND: [
+            { parentId: null },
+            {
+              OR: [
+                { senderId: currentUserId, receiverId },
+                { senderId: receiverId, receiverId: currentUserId },
+              ],
+            },
+          ],
+        },
+        include,
+        orderBy: { createdAt: "asc" },
+        take: 50,
+      });
+      return NextResponse.json(messages);
+    }
+
+    return NextResponse.json({ error: "Context required" }, { status: 400 });
+  } catch (error) {
+    console.error("[CHAT_GET_ERROR]", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(req: Request) {
@@ -88,9 +142,46 @@ export async function POST(req: Request) {
     const body = await req.json();
     const data = messageSchema.parse(body);
 
+    // Sanitize relation IDs
+    const sanitized = {
+      content: data.content,
+      workspaceId: data.workspaceId?.trim() || null,
+      projectId: data.projectId?.trim() || null,
+      receiverId: data.receiverId?.trim() || null,
+      parentId: data.parentId?.trim() || null,
+    };
+
+    if (
+      !sanitized.workspaceId &&
+      !sanitized.projectId &&
+      !sanitized.receiverId &&
+      !sanitized.parentId
+    ) {
+      return NextResponse.json({ error: "Missing context" }, { status: 400 });
+    }
+
+    // Verify workspace membership if workspaceId is provided
+    if (sanitized.workspaceId) {
+      const membership = await prisma.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: {
+            workspaceId: sanitized.workspaceId,
+            userId: senderId,
+          },
+        },
+      });
+
+      if (!membership) {
+        return NextResponse.json(
+          { error: "Not a workspace member" },
+          { status: 403 },
+        );
+      }
+    }
+
     const message = await prisma.message.create({
       data: {
-        ...data,
+        ...sanitized,
         senderId,
       },
       include: {
@@ -100,38 +191,51 @@ export async function POST(req: Request) {
       },
     });
 
-    // Broadcast via Supabase Realtime
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
+    // Broadcast (Non-blocking to prevent hangs)
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/server");
+        const supabase = await createClient();
+        const channelId = sanitized.parentId
+          ? `thread:${sanitized.parentId}`
+          : sanitized.workspaceId
+            ? `workspace:${sanitized.workspaceId}`
+            : sanitized.projectId
+              ? `project:${sanitized.projectId}`
+              : `user:${sanitized.receiverId}`;
 
-    const channelId = data.parentId
-      ? `thread:${data.parentId}`
-      : data.projectId
-        ? `project:${data.projectId}`
-        : `user:${data.receiverId}`;
+        if (channelId) {
+          await supabase.channel(channelId).send({
+            type: "broadcast",
+            event: "new-message",
+            payload: message,
+          });
 
-    await supabase.channel(channelId).send({
-      type: "broadcast",
-      event: "new-message",
-      payload: message,
-    });
-
-    if (!data.projectId && data.receiverId) {
-      // Also send to sender's own channel for DMs
-      await supabase.channel(`user:${senderId}`).send({
-        type: "broadcast",
-        event: "new-message",
-        payload: message,
-      });
-    }
+          if (
+            !sanitized.workspaceId &&
+            !sanitized.projectId &&
+            sanitized.receiverId
+          ) {
+            await supabase.channel(`user:${senderId}`).send({
+              type: "broadcast",
+              event: "new-message",
+              payload: message,
+            });
+          }
+        }
+      } catch (e) {
+        console.error("[CHAT_BROADCAST_ERROR]", e);
+      }
+    })();
 
     return NextResponse.json(message, { status: 201 });
   } catch (error) {
+    console.error("[CHAT_POST_ERROR]", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

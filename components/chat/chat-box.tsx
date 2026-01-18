@@ -6,6 +6,7 @@ import React, {
   useRef,
   FormEvent,
   ChangeEvent,
+  useMemo,
 } from "react";
 
 import { useUser } from "@/components/providers/user-provider";
@@ -21,6 +22,8 @@ import {
   X,
   ArrowLeft,
   Search,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
@@ -32,6 +35,9 @@ interface Message {
   content: string;
   senderId: string;
   sender: { name: string; image?: string };
+  isPinned: boolean;
+  status?: "SENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
+  deliveredAt?: string;
   createdAt: string;
   updatedAt: string;
   reactions: {
@@ -43,68 +49,196 @@ interface Message {
 }
 
 export default function ChatBox({
+  workspaceId,
   projectId,
   receiverId,
 }: {
+  workspaceId?: string;
   projectId?: string;
   receiverId?: string;
 }) {
   const supabase = createClient();
   const { user } = useUser();
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
+
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [activeThread, setActiveThread] = useState<Message | null>(null);
+
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Typing debounce refs
+  const typingIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const typingThrottleRef = useRef<number>(0);
+
+  const myDisplayName = useMemo(() => {
+    return user?.user_metadata?.name || user?.email || "Unknown";
+  }, [user]);
+
+  // Deterministic DM key (stable conversation id for two users)
+  const dmKey = useMemo(() => {
+    if (!user?.id || !receiverId) return null;
+    return [user.id, receiverId].sort().join(":");
+  }, [user?.id, receiverId]);
+
+  // Determine realtime channel name
+  const channelName = useMemo(() => {
+    if (!user?.id) return null;
+
+    if (activeThread?.id) return `thread:${activeThread.id}`;
+    if (workspaceId) return `workspace:${workspaceId}`;
+    if (projectId) return `project:${projectId}`;
+    if (dmKey) return `dm:${dmKey}`;
+
+    // fallback (should be rare): if no receiverId and no projectId
+    return `user:${user.id}`;
+  }, [user?.id, activeThread?.id, workspaceId, projectId, dmKey]);
+
+  // Build fetch URL
+  const fetchUrl = useMemo(() => {
+    if (activeThread?.id)
+      return `/api/chat?parentId=${encodeURIComponent(activeThread.id)}`;
+    if (workspaceId)
+      return `/api/chat?workspaceId=${encodeURIComponent(workspaceId)}`;
+    if (projectId)
+      return `/api/chat?projectId=${encodeURIComponent(projectId)}`;
+    if (receiverId)
+      return `/api/chat?receiverId=${encodeURIComponent(receiverId)}`;
+    return `/api/chat`;
+  }, [activeThread?.id, workspaceId, projectId, receiverId]);
+
+  // Fetch messages + subscribe realtime
   useEffect(() => {
+    // Reset UI when context changes
+    setMessages([]);
+    setTypingUsers([]);
+    setLoading(true);
+
+    // Must wait for auth
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    // For DM view, receiverId must exist to be meaningful
+    if (!workspaceId && !projectId && !activeThread?.id && !receiverId) {
+      // Added workspaceId
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const abort = new AbortController();
+
     const fetchMessages = async () => {
-      const url = activeThread
-        ? `/api/chat?parentId=${activeThread.id}`
-        : projectId
-          ? `/api/chat?projectId=${projectId}`
-          : `/api/chat?receiverId=${receiverId}`;
       try {
-        const res = await fetch(url);
+        const res = await fetch(fetchUrl, {
+          method: "GET",
+          credentials: "include",
+          signal: abort.signal,
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          // 401 commonly happens if session cookie is not ready/valid
+          console.error(`Fetch failed: ${res.status} ${text}`);
+          if (isMounted) setMessages([]);
+          return;
+        }
+
         const data = await res.json();
-        setMessages(data);
+        if (!isMounted) return;
+        setMessages(
+          Array.isArray(data) ? data : (data?.messages ?? data ?? []),
+        );
       } catch (e: unknown) {
-        console.error(e);
+        if (e instanceof Error && e.name === "AbortError") return;
+        console.error("fetchMessages error:", e);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchMessages();
 
-    if (!user) return;
+    return () => {
+      isMounted = false;
+      abort.abort();
+    };
+  }, [
+    user?.id,
+    workspaceId, // Added workspaceId
+    projectId,
+    receiverId,
+    fetchUrl,
+    activeThread?.id,
+  ]);
 
-    // Supabase Realtime Channel Subscription
-    const channelName = activeThread
-      ? `thread:${activeThread.id}`
-      : projectId
-        ? `project:${projectId}`
-        : `user:${user.id}`;
+  // Subscribe realtime
+  useEffect(() => {
+    if (!user?.id || !channelName) return;
+
+    // Cleanup any previous channel first
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
     const channel = supabase
       .channel(channelName)
-      .on("broadcast", { event: "new-message" }, ({ payload }) => {
+      .on("broadcast", { event: "new-message" }, async ({ payload }) => {
         const msg = payload as Message;
-        if (
-          !projectId &&
-          msg.senderId !== user.id &&
-          msg.senderId !== receiverId
-        )
-          return;
+
+        // If we are in DM context, ensure the message belongs to this DM conversation.
+        // With dm:<sortedUserIds> channel this should already be correct, but keep this as safety.
+        if (!workspaceId && !projectId && !activeThread?.id && receiverId) {
+          // Added workspaceId
+          const a = user.id;
+          const b = receiverId;
+          const ok =
+            (msg.senderId === a &&
+              (payload as { receiverId?: string })?.receiverId === b) ||
+            (msg.senderId === b &&
+              (payload as { receiverId?: string })?.receiverId === a) ||
+            msg.senderId === a ||
+            msg.senderId === b;
+
+          // We cannot fully validate without receiverId in payload, so we minimally keep it permissive.
+          // The dm:<key> channel should already isolate correctly.
+          if (!ok) return;
+        }
+
         setMessages((prev) => {
           if (prev.find((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
+
+        // Send delivery confirmation if message is from someone else
+        if (msg.senderId !== user.id) {
+          try {
+            await fetch("/api/messages/delivered", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ messageId: msg.id }),
+            });
+          } catch (e: unknown) {
+            console.error("Failed to send delivery confirmation:", e);
+          }
+        }
       })
       .on("broadcast", { event: "message-updated" }, ({ payload }) => {
         setMessages((prev) =>
@@ -114,13 +248,40 @@ export default function ChatBox({
       .on("broadcast", { event: "message-deleted" }, ({ payload }) => {
         setMessages((prev) => prev.filter((m) => m.id !== payload.id));
       })
+      .on("broadcast", { event: "message-pinned-toggled" }, ({ payload }) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.id ? { ...m, isPinned: payload.isPinned } : m,
+          ),
+        );
+      })
+      .on("broadcast", { event: "message-delivered" }, ({ payload }) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.id
+              ? {
+                  ...m,
+                  status: payload.status,
+                  deliveredAt: payload.deliveredAt,
+                }
+              : m,
+          ),
+        );
+      })
+      .on("broadcast", { event: "message-read" }, ({ payload }) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === payload.id ? { ...m, status: payload.status } : m,
+          ),
+        );
+      })
       .on("broadcast", { event: "reaction-added" }, ({ payload }) => {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === payload.messageId
               ? {
                   ...m,
-                  reactions: [...m.reactions, payload.reaction],
+                  reactions: [...(m.reactions ?? []), payload.reaction],
                 }
               : m,
           ),
@@ -132,7 +293,7 @@ export default function ChatBox({
             m.id === payload.messageId
               ? {
                   ...m,
-                  reactions: m.reactions.filter(
+                  reactions: (m.reactions ?? []).filter(
                     (r) =>
                       !(
                         r.userId === payload.userId && r.emoji === payload.emoji
@@ -144,59 +305,131 @@ export default function ChatBox({
         );
       })
       .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        const userName = user?.user_metadata?.name || user?.email || "Unknown";
-        const users = Object.values(state)
+        const state = channel.presenceState<{
+          name: string;
+          isTyping: boolean;
+        }>();
+
+        // Only show users who are actually typing
+        const usersTyping = Object.values(state)
           .flat()
-          .map((p) => (p as unknown as { name: string }).name)
-          .filter((name) => name !== userName);
-        setTypingUsers(users);
+          .filter((p) => p?.isTyping === true)
+          .map((p) => p?.name)
+          .filter((name): name is string => !!name && name !== myDisplayName);
+
+        setTypingUsers(usersTyping);
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          const userName =
-            user?.user_metadata?.name || user?.email || "Unknown";
-          await channel.track({ name: userName, isTyping: false });
+          await channel.track({ name: myDisplayName, isTyping: false });
         }
       });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [projectId, receiverId, user, supabase, activeThread]);
+    channelRef.current = channel;
 
+    return () => {
+      if (typingIdleTimeoutRef.current)
+        clearTimeout(typingIdleTimeoutRef.current);
+      if (channel) supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [
+    user?.id,
+    myDisplayName,
+    workspaceId,
+    projectId,
+    receiverId,
+    dmKey,
+    channelName,
+    fetchUrl,
+    activeThread?.id,
+    supabase,
+  ]);
+
+  // Send read receipt when messages change
+  useEffect(() => {
+    const sendReadReceipt = async () => {
+      if (!messages.length) return;
+      const lastMessage = messages[messages.length - 1];
+      try {
+        await fetch("/api/messages/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            messageId: lastMessage.id,
+            projectId,
+            receiverId,
+          }),
+        });
+      } catch (e) {
+        console.error("Read receipt failed:", e);
+      }
+    };
+
+    sendReadReceipt();
+  }, [messages, projectId, receiverId]);
+
+  // Auto scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, typingUsers.length]);
 
-  const handleInputChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
+  // Debounced typing tracker
+  const trackTyping = async (isTyping: boolean) => {
+    if (!user || !channelRef.current) return;
 
-    if (user) {
-      const channelName = activeThread
-        ? `thread:${activeThread.id}`
-        : projectId
-          ? `project:${projectId}`
-          : `user:${user.id}`;
+    const now = Date.now();
+    // Throttle presence updates (avoid spamming)
+    if (isTyping && now - typingThrottleRef.current < 300) return;
+    typingThrottleRef.current = now;
 
-      const channel = supabase.channel(channelName);
-      const userName = user.user_metadata?.name || user.email || "Unknown";
-      if (e.target.value.length > 0) {
-        await channel.track({ name: userName, isTyping: true });
-      } else {
-        await channel.track({ name: userName, isTyping: false });
-      }
+    try {
+      await channelRef.current.track({ name: myDisplayName, isTyping });
+    } catch (e) {
+      // Presence track can fail if channel disconnected momentarily
+      console.error("Typing track failed:", e);
     }
+  };
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInput(value);
+
+    if (!user?.id) return;
+
+    // Mark typing true when there is content, false when empty.
+    const currentlyTyping = value.length > 0;
+
+    // Immediately track typing true (throttled)
+    if (currentlyTyping) {
+      void trackTyping(true);
+    } else {
+      void trackTyping(false);
+    }
+
+    // When user stops typing for a short time, send isTyping=false
+    if (typingIdleTimeoutRef.current)
+      clearTimeout(typingIdleTimeoutRef.current);
+    typingIdleTimeoutRef.current = setTimeout(() => {
+      void trackTyping(false);
+    }, 900);
   };
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !user) return;
+
+    // stop typing once sending
+    void trackTyping(false);
+    if (typingIdleTimeoutRef.current)
+      clearTimeout(typingIdleTimeoutRef.current);
 
     const payload = {
-      content: input,
+      content: input.trim(),
+      workspaceId,
       projectId,
       receiverId,
       parentId: activeThread?.id,
@@ -207,30 +440,83 @@ export default function ChatBox({
       : "/api/chat";
     const method = editingMessage ? "PATCH" : "POST";
 
+    // Optimistic update: Show message immediately
+    if (!editingMessage) {
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMessage: Message = {
+        id: tempId,
+        content: payload.content,
+        senderId: user.id,
+        sender: {
+          name:
+            (user as unknown as { name?: string }).name || user.email || "You",
+          image: (user as unknown as { image?: string }).image,
+        },
+        isPinned: false,
+        status: "SENDING",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        reactions: [],
+        _count: { replies: 0 },
+      };
+
+      setMessages((prev) => [...prev, optimisticMessage]);
+      setInput("");
+    }
+
     try {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        const newMessage = await res.json();
-        if (editingMessage) {
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(`Send failed: ${res.status} ${text}`);
+
+        // Mark as failed if not editing
+        if (!editingMessage) {
           setMessages((prev) =>
-            prev.map((m) => (m.id === newMessage.id ? newMessage : m)),
+            prev.map((m) =>
+              m.status === "SENDING" ? { ...m, status: "FAILED" as const } : m,
+            ),
           );
-          setEditingMessage(null);
-        } else {
-          setMessages((prev) => {
-            if (prev.find((m) => m.id === newMessage.id)) return prev;
-            return [...prev, newMessage];
-          });
         }
-        setInput("");
+        return;
+      }
+
+      // Some endpoints might return empty body; handle safely
+      const text = await res.text();
+      const newMessage = text ? (JSON.parse(text) as Message) : null;
+      if (!newMessage) {
+        if (!editingMessage) setInput("");
+        setEditingMessage(null);
+        return;
+      }
+
+      if (editingMessage) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === newMessage.id ? newMessage : m)),
+        );
+        setEditingMessage(null);
+      } else {
+        // Replace optimistic message with server response
+        setMessages((prev) =>
+          prev.map((m) => (m.status === "SENDING" ? newMessage : m)),
+        );
       }
     } catch (e) {
-      console.error(e);
+      console.error("Send error:", e);
+      // Mark as failed
+      if (!editingMessage) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.status === "SENDING" ? { ...m, status: "FAILED" as const } : m,
+          ),
+        );
+      }
     }
   };
 
@@ -239,19 +525,35 @@ export default function ChatBox({
       await fetch(`/api/messages/${messageId}/reactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ emoji }),
       });
-      // UI will be updated via real-time broadcast
+      // UI updates via realtime broadcast
     } catch (e) {
       console.error("Reaction failed:", e);
+    }
+  };
+
+  const handlePinMessage = async (messageId: string) => {
+    try {
+      await fetch(`/api/messages/${messageId}/pin`, {
+        method: "POST",
+        credentials: "include",
+      });
+      // UI updates via realtime broadcast
+    } catch (e) {
+      console.error("Pin failed:", e);
     }
   };
 
   const handleDeleteMessage = async (messageId: string) => {
     if (!confirm("Are you sure you want to delete this message?")) return;
     try {
-      await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
-      // UI will be updated via real-time broadcast
+      await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      // UI updates via realtime broadcast
     } catch (e) {
       console.error("Delete failed:", e);
     }
@@ -260,19 +562,22 @@ export default function ChatBox({
   const renderContent = (content: string) => {
     // Regex for: @[Name](userId)
     const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
-    const result = [];
+    const result: React.ReactNode[] = [];
 
     let lastIndex = 0;
     let match: RegExpExecArray | null;
+
     while ((match = mentionRegex.exec(content)) !== null) {
-      // Normal text before mention
       result.push(content.substring(lastIndex, match.index));
-      // Mention with badge
+
+      const mentionName = match[1];
+      const mentionUserId = match[2];
+
       result.push(
         <button
-          key={match[2] + match.index}
+          key={mentionUserId + match.index}
           onClick={() => {
-            setSelectedUserId(match![2]);
+            setSelectedUserId(mentionUserId);
             setIsProfileModalOpen(true);
           }}
           className="hover:scale-110 transition-transform active:scale-95 inline-block"
@@ -281,14 +586,15 @@ export default function ChatBox({
             variant="secondary"
             className="bg-primary/10 text-primary border-none text-[12px] font-bold mx-0.5 cursor-pointer"
           >
-            @{match![1]}
+            @{mentionName}
           </Badge>
         </button>,
       );
+
       lastIndex = mentionRegex.lastIndex;
     }
-    result.push(content.substring(lastIndex));
 
+    result.push(content.substring(lastIndex));
     return result;
   };
 
@@ -307,6 +613,7 @@ export default function ChatBox({
             <button
               onClick={() => setActiveThread(null)}
               className="p-1.5 hover:bg-muted rounded-full transition-colors mr-1"
+              aria-label="Back"
             >
               <ArrowLeft size={18} />
             </button>
@@ -315,6 +622,7 @@ export default function ChatBox({
           ) : (
             <UserIcon size={20} className="text-muted-foreground" />
           )}
+
           <div className="flex flex-col">
             <span className="text-sm">
               {activeThread
@@ -323,13 +631,15 @@ export default function ChatBox({
                   ? "Project Channel"
                   : "Direct Message"}
             </span>
+
             {activeThread && (
-              <span className="text-[10px] text-muted-foreground font-medium truncate max-w-[200px]">
+              <span className="text-[10px] text-muted-foreground font-medium truncate max-w-50">
                 Replying to: {activeThread.content}
               </span>
             )}
           </div>
         </div>
+
         {activeThread && (
           <button
             onClick={() => setActiveThread(null)}
@@ -338,6 +648,7 @@ export default function ChatBox({
             Close Thread
           </button>
         )}
+
         {!activeThread && (
           <button
             onClick={() => setShowSearch(!showSearch)}
@@ -347,6 +658,7 @@ export default function ChatBox({
                 ? "bg-primary text-white"
                 : "hover:bg-muted text-muted-foreground",
             )}
+            aria-label="Search"
           >
             <Search size={18} />
           </button>
@@ -363,7 +675,7 @@ export default function ChatBox({
             <input
               autoFocus
               placeholder="Search messages..."
-              className="w-full h-10 bg-card border border-border rounded-xl pl-9 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              className="w-full h-10 bg-card border border-border rounded-xl pl-9 pr-9 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -371,6 +683,7 @@ export default function ChatBox({
               <button
                 onClick={() => setSearchQuery("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
               >
                 <X size={14} />
               </button>
@@ -391,7 +704,7 @@ export default function ChatBox({
           )
           .map((msg) => {
             const isOwn = msg.senderId === user?.id;
-            const hasReactions = msg.reactions?.length > 0;
+            const hasReactions = (msg.reactions?.length ?? 0) > 0;
 
             return (
               <div
@@ -402,8 +715,9 @@ export default function ChatBox({
                 )}
               >
                 <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center font-semibold text-xs shrink-0 uppercase">
-                  {(msg.sender.name || "U")[0]}
+                  {(msg.sender?.name || "U")[0]}
                 </div>
+
                 <div
                   className={cn("flex flex-col gap-1", isOwn && "items-end")}
                 >
@@ -413,7 +727,9 @@ export default function ChatBox({
                       isOwn && "flex-row-reverse",
                     )}
                   >
-                    <span className="text-xs font-bold">{msg.sender.name}</span>
+                    <span className="text-xs font-bold">
+                      {msg.sender?.name || "Unknown"}
+                    </span>
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(msg.createdAt).toLocaleTimeString([], {
                         hour: "2-digit",
@@ -425,7 +741,7 @@ export default function ChatBox({
                   <div className="relative group/content">
                     <div
                       className={cn(
-                        "p-3 px-4 rounded-2xl text-[14px] leading-relaxed break-words",
+                        "p-3 px-4 rounded-2xl text-[14px] leading-relaxed wrap-break-words",
                         isOwn
                           ? "bg-primary text-primary-foreground rounded-tr-none"
                           : "bg-muted text-foreground rounded-tl-none",
@@ -445,16 +761,33 @@ export default function ChatBox({
                         className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
                         onClick={() => handleAddReaction(msg.id, "👍")}
                         title="React with 👍"
+                        type="button"
                       >
                         <Smile size={14} />
                       </button>
+
                       <button
                         className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
                         onClick={() => setActiveThread(msg)}
                         title="Reply"
+                        type="button"
                       >
                         <Reply size={14} />
                       </button>
+
+                      <button
+                        className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => handlePinMessage(msg.id)}
+                        title={msg.isPinned ? "Unpin" : "Pin"}
+                        type="button"
+                      >
+                        {msg.isPinned ? (
+                          <PinOff size={14} />
+                        ) : (
+                          <Pin size={14} />
+                        )}
+                      </button>
+
                       {isOwn && (
                         <>
                           <button
@@ -464,13 +797,16 @@ export default function ChatBox({
                               setInput(msg.content);
                             }}
                             title="Edit"
+                            type="button"
                           >
                             <Pencil size={14} />
                           </button>
+
                           <button
-                            className="p-1.5 hover:bg-muted rounded-md text-destructive/60 hover:text-destructive hover:bg-destructive/5 rounded-md transition-colors"
+                            className="p-1.5 text-destructive/60 hover:text-destructive hover:bg-destructive/5 rounded-md transition-colors"
                             onClick={() => handleDeleteMessage(msg.id)}
                             title="Delete"
+                            type="button"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -488,7 +824,7 @@ export default function ChatBox({
                       )}
                     >
                       {Object.entries(
-                        msg.reactions.reduce(
+                        (msg.reactions ?? []).reduce(
                           (acc: Record<string, number>, r) => {
                             acc[r.emoji] = (acc[r.emoji] || 0) + 1;
                             return acc;
@@ -496,18 +832,20 @@ export default function ChatBox({
                           {},
                         ),
                       ).map(([emoji, count]) => {
-                        const reactedByMe = msg.reactions.some(
+                        const reactedByMe = (msg.reactions ?? []).some(
                           (r) => r.userId === user?.id && r.emoji === emoji,
                         );
+
                         return (
                           <button
                             key={emoji}
                             onClick={() => handleAddReaction(msg.id, emoji)}
+                            type="button"
                             className={cn(
                               "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all",
                               reactedByMe
                                 ? "bg-primary/10 border-primary/30 text-primary"
-                                : "bg-muted border-border text-muted-foreground hover:border-border-hover",
+                                : "bg-muted border-border text-muted-foreground hover:border-border",
                             )}
                           >
                             <span>{emoji}</span>
@@ -522,6 +860,7 @@ export default function ChatBox({
                   {!activeThread && msg._count?.replies > 0 && (
                     <button
                       onClick={() => setActiveThread(msg)}
+                      type="button"
                       className={cn(
                         "mt-1 text-[10px] font-bold text-primary hover:underline flex items-center gap-1",
                         isOwn && "justify-end w-full",
@@ -566,6 +905,7 @@ export default function ChatBox({
           value={input}
           onChange={handleInputChange}
         />
+
         {editingMessage && (
           <button
             type="button"
@@ -574,14 +914,17 @@ export default function ChatBox({
               setInput("");
             }}
             className="w-11 h-11 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Cancel edit"
           >
             <X size={18} />
           </button>
         )}
+
         <button
           type="submit"
           disabled={!input.trim()}
           className="w-11 h-11 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-soft"
+          aria-label="Send"
         >
           <Send size={18} />
         </button>

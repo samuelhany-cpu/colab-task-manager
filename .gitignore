@@ -45,3 +45,7 @@ lint_results.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+#error pics
+error_*.png

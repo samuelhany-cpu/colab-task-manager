@@ -16,18 +16,33 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId");
+  const workspaceSlug = searchParams.get("workspaceSlug");
 
-  if (!workspaceId) {
+  if (!workspaceId && !workspaceSlug) {
     return NextResponse.json(
-      { error: "Workspace ID is required" },
+      { error: "Workspace ID or Slug is required" },
       { status: 400 },
     );
+  }
+
+  let finalWorkspaceId = workspaceId;
+  if (!finalWorkspaceId && workspaceSlug) {
+    const workspace = await prisma.workspace.findUnique({
+      where: { slug: workspaceSlug },
+    });
+    if (!workspace) {
+      return NextResponse.json(
+        { error: "Workspace not found" },
+        { status: 404 },
+      );
+    }
+    finalWorkspaceId = workspace.id;
   }
 
   // Check if user is member of the workspace
   const membership = await prisma.workspaceMember.findFirst({
     where: {
-      workspaceId,
+      workspaceId: finalWorkspaceId as string,
       userId: user.id,
     },
   });
@@ -37,7 +52,7 @@ export async function GET(req: Request) {
   }
 
   const projects = await prisma.project.findMany({
-    where: { workspaceId },
+    where: { workspaceId: finalWorkspaceId as string },
     include: {
       members: {
         include: {

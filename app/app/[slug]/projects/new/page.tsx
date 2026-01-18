@@ -32,6 +32,11 @@ export default function NewProjectPage({
       // First get workspace ID
       const wsRes = await fetch("/api/workspaces");
       const workspaces = await wsRes.json();
+
+      if (!Array.isArray(workspaces)) {
+        throw new Error(workspaces?.error || "Failed to fetch workspaces");
+      }
+
       const workspace = workspaces.find(
         (w: { id: string; slug: string }) => w.slug === slug,
       );
@@ -63,7 +68,10 @@ export default function NewProjectPage({
           href={`/app/${slug}`}
           className="inline-flex items-center gap-2 text-sm font-bold text-mutedForeground hover:text-primary transition-colors group"
         >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft
+            size={16}
+            className="group-hover:-translate-x-1 transition-transform"
+          />
           BACK TO DASHBOARD
         </Link>
 
@@ -73,7 +81,8 @@ export default function NewProjectPage({
             Create New Project
           </h1>
           <p className="text-mutedForeground text-lg">
-            Start a new collaboration in the <span className="text-foreground font-bold">{slug}</span> workspace.
+            Start a new collaboration in the{" "}
+            <span className="text-foreground font-bold">{slug}</span> workspace.
           </p>
         </div>
 
@@ -87,7 +96,10 @@ export default function NewProjectPage({
             )}
 
             <div className="space-y-2">
-              <label htmlFor="name" className="text-xs font-black uppercase tracking-widest text-mutedForeground/80 ml-1">
+              <label
+                htmlFor="name"
+                className="text-xs font-black uppercase tracking-widest text-mutedForeground/80 ml-1"
+              >
                 Project Name
               </label>
               <Input
@@ -101,7 +113,10 @@ export default function NewProjectPage({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="description" className="text-xs font-black uppercase tracking-widest text-mutedForeground/80 ml-1">
+              <label
+                htmlFor="description"
+                className="text-xs font-black uppercase tracking-widest text-mutedForeground/80 ml-1"
+              >
                 Description (Optional)
               </label>
               <Textarea
