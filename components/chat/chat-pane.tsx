@@ -56,6 +56,7 @@ interface ChatPaneProps {
   workspaceId?: string;
   projectId?: string;
   receiverId?: string;
+  conversationId?: string;
   parentId?: string;
   onThreadSelect?: (message: Message) => void;
   onClose?: () => void;
@@ -67,6 +68,7 @@ export default function ChatPane({
   workspaceId,
   projectId,
   receiverId,
+  conversationId,
   parentId,
   onThreadSelect,
   onClose,
@@ -153,11 +155,12 @@ export default function ChatPane({
     if (parentId) return `thread:${parentId}`;
     if (workspaceId) return `workspace:${workspaceId}`;
     if (projectId) return `project:${projectId}`;
+    if (conversationId) return `conversation:${conversationId}`;
     if (dmKey) return `dm:${dmKey}`;
 
     // fallback (should be rare): if no receiverId and no projectId
     return `user:${user.id}`;
-  }, [user?.id, parentId, workspaceId, projectId, dmKey]);
+  }, [user?.id, parentId, workspaceId, projectId, conversationId, dmKey]);
 
   // Build fetch URL
   const fetchUrl = useMemo(() => {
@@ -166,10 +169,12 @@ export default function ChatPane({
       return `/api/chat?workspaceId=${encodeURIComponent(workspaceId)}`;
     if (projectId)
       return `/api/chat?projectId=${encodeURIComponent(projectId)}`;
+    if (conversationId)
+      return `/api/chat?conversationId=${encodeURIComponent(conversationId)}`;
     if (receiverId)
       return `/api/chat?receiverId=${encodeURIComponent(receiverId)}`;
     return `/api/chat`;
-  }, [parentId, workspaceId, projectId, receiverId, dmKey]);
+  }, [parentId, workspaceId, projectId, receiverId, conversationId, dmKey]);
 
   // Fetch messages + subscribe realtime
   useEffect(() => {
@@ -185,7 +190,13 @@ export default function ChatPane({
     }
 
     // For DM view, receiverId must exist to be meaningful
-    if (!workspaceId && !projectId && !parentId && !receiverId) {
+    if (
+      !workspaceId &&
+      !projectId &&
+      !parentId &&
+      !receiverId &&
+      !conversationId
+    ) {
       // Added workspaceId
       setLoading(false);
       return;
@@ -234,6 +245,7 @@ export default function ChatPane({
     workspaceId, // Added workspaceId
     projectId,
     receiverId,
+    conversationId,
     fetchUrl,
     parentId,
   ]);
@@ -255,7 +267,13 @@ export default function ChatPane({
 
         // If we are in DM context, ensure the message belongs to this DM conversation.
         // With dm:<sortedUserIds> channel this should already be correct, but keep this as safety.
-        if (!workspaceId && !projectId && !parentId && receiverId) {
+        if (
+          !workspaceId &&
+          !projectId &&
+          !parentId &&
+          !conversationId &&
+          receiverId
+        ) {
           // Added workspaceId
           const a = user.id;
           const b = receiverId;
@@ -390,6 +408,7 @@ export default function ChatPane({
     workspaceId,
     projectId,
     receiverId,
+    conversationId,
     dmKey,
     channelName,
     fetchUrl,
@@ -483,6 +502,7 @@ export default function ChatPane({
       workspaceId,
       projectId,
       receiverId,
+      conversationId,
       parentId,
     };
 
@@ -665,7 +685,12 @@ export default function ChatPane({
     );
 
   return (
-    <div className="flex flex-col h-full rounded-2xl border border-border bg-card text-card-foreground shadow-soft overflow-hidden">
+    <div
+      className={cn(
+        "flex flex-col h-full rounded-2xl border border-border bg-card text-card-foreground shadow-soft overflow-hidden",
+        className,
+      )}
+    >
       <div className="p-4 px-6 flex items-center justify-between border-b border-border font-semibold bg-muted/5">
         <div className="flex items-center gap-3">
           {isThreadView ? (
@@ -688,7 +713,9 @@ export default function ChatPane({
                 ? "Thread"
                 : projectId
                   ? "Project Channel"
-                  : "Direct Message"}
+                  : conversationId
+                    ? "Group Conversation"
+                    : "Direct Message"}
             </span>
           </div>
         </div>

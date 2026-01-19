@@ -6,12 +6,17 @@ import { ArrowLeft, MessageSquare, Shield } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
+import { useSearchParams } from "next/navigation";
+
 export default function WorkspaceChatPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const searchParams = useSearchParams();
+  const conversationId = searchParams.get("conversationId") || undefined;
+
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -97,7 +102,7 @@ export default function WorkspaceChatPage({
             <div className="text-muted-foreground">Loading...</div>
           </div>
         ) : workspaceId ? (
-          <ChatBox workspaceId={workspaceId} />
+          <ChatBox workspaceId={workspaceId} conversationId={conversationId} />
         ) : (
           <div className="flex-1 flex items-center justify-center p-8">
             <div className="text-center space-y-4 max-w-md">

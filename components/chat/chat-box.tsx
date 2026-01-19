@@ -4,15 +4,19 @@ import { useState } from "react";
 import ChatPane, { Message } from "./chat-pane";
 import { cn } from "@/lib/cn";
 
+interface ChatBoxProps {
+  workspaceId?: string;
+  projectId?: string;
+  receiverId?: string;
+  conversationId?: string;
+}
+
 export default function ChatBox({
   workspaceId,
   projectId,
   receiverId,
-}: {
-  workspaceId?: string;
-  projectId?: string;
-  receiverId?: string;
-}) {
+  conversationId,
+}: ChatBoxProps) {
   const [activeThread, setActiveThread] = useState<Message | null>(null);
 
   return (
@@ -21,6 +25,8 @@ export default function ChatBox({
         workspaceId={workspaceId}
         projectId={projectId}
         receiverId={receiverId}
+        conversationId={conversationId}
+        parentId={activeThread ? activeThread.id : undefined}
         className={cn("flex-1", activeThread ? "border-r border-border" : "")}
         onThreadSelect={setActiveThread}
       />

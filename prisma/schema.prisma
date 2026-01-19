@@ -36,6 +36,33 @@ model User {
   reactions         Reaction[]
   fileVersions      FileVersion[]
   messageReads      MessageRead[]
+  conversationMemberships ConversationMember[]
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String?
+  isGroup     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ConversationMember[]
+  messages  Message[]
+}
+
+model ConversationMember {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
 }
 
 model Workspace {
@@ -51,6 +78,7 @@ model Workspace {
   projects Project[]
   tags     Tag[]
   messages Message[]
+  conversations Conversation[]
 }
 
 model WorkspaceMember {
@@ -269,7 +297,8 @@ model Message {
   workspaceId String?       // Workspace channel
   projectId   String?       // Project channel
   senderId    String
-  receiverId  String?       // DM
+  receiverId  String?       // DM (Legacy/Simple DM)
+  conversationId String?    // Group DM
   parentId    String?
   isPinned    Boolean       @default(false)
   status      MessageStatus @default(SENT)
@@ -281,6 +310,7 @@ model Message {
   project   Project?   @relation(fields: [projectId], references: [id])
   sender    User       @relation("SentMessages", fields: [senderId], references: [id])
   receiver  User?      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   parent    Message?   @relation("Thread", fields: [parentId], references: [id])
   replies   Message[]  @relation("Thread")
   reactions Reaction[]
