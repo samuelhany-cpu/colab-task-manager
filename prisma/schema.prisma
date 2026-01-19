@@ -63,6 +63,7 @@ model ConversationMember {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
+  @@index([userId])
 }
 
 model Workspace {
@@ -92,6 +93,7 @@ model WorkspaceMember {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
+  @@index([userId])
 }
 
 enum Role {
@@ -132,6 +134,7 @@ model ProjectMember {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model Task {
@@ -158,6 +161,10 @@ model Task {
   timers      Timer[]
   files       File[]
   tags        Tag[]
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([creatorId])
 }
 
 model Tag {
@@ -194,6 +201,9 @@ model Comment {
 
   task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id])
+
+  @@index([taskId])
+  @@index([authorId])
 }
 
 model Activity {
@@ -206,6 +216,9 @@ model Activity {
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
 }
 
 enum ActivityType {
@@ -228,6 +241,9 @@ model TimeEntry {
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
 }
 
 model Timer {
@@ -259,6 +275,11 @@ model File {
   folder     Folder? @relation(fields: [folderId], references: [id])
   uploadedBy User    @relation(fields: [uploadedById], references: [id])
   versions   FileVersion[]
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([folderId])
+  @@index([uploadedById])
 }
 
 model FileVersion {
@@ -274,6 +295,9 @@ model FileVersion {
 
   file       File @relation(fields: [fileId], references: [id], onDelete: Cascade)
   uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([fileId])
+  @@index([uploadedById])
 }
 
 model Folder {
@@ -289,6 +313,7 @@ model Folder {
   files    File[]
 
   @@index([projectId])
+  @@index([parentId])
 }
 
 model Message {
@@ -315,6 +340,13 @@ model Message {
   replies   Message[]  @relation("Thread")
   reactions Reaction[]
   reads     MessageRead[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([conversationId])
+  @@index([parentId])
 }
 
 enum MessageStatus {
@@ -353,6 +385,8 @@ model Reaction {
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
 }
 
 model Notification {
@@ -365,6 +399,8 @@ model Notification {
   createdAt DateTime         @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 enum NotificationType {

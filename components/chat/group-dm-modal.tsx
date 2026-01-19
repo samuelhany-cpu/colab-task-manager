@@ -35,10 +35,13 @@ interface WorkspaceUser {
 
 interface ConversationWithMembers {
   id: string;
+  name?: string | null;
   members: {
+    userId: string;
     user: {
       id: string;
       name: string | null;
+      email: string | null;
       image: string | null;
     };
   }[];

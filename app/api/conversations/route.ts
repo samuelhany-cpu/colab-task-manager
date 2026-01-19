@@ -105,6 +105,7 @@ export async function POST(req: Request) {
               select: {
                 id: true,
                 name: true,
+                email: true,
                 image: true,
               },
             },
