@@ -93,6 +93,40 @@ export default function ChatPane({
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Search
+  const [searchResults, setSearchResults] = useState<Message[] | null>(null);
+  const [isSearchingBackend, setIsSearchingBackend] = useState(false);
+
+  // Debounced search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingBackend(true);
+      try {
+        const params = new URLSearchParams({ q: searchQuery });
+        if (workspaceId) params.append("workspaceId", workspaceId);
+        if (projectId) params.append("projectId", projectId);
+        if (receiverId) params.append("receiverId", receiverId);
+
+        const res = await fetch(`/api/chat/search?${params}`);
+        if (!res.ok) throw new Error("Search failed");
+
+        const data = await res.json();
+        if (Array.isArray(data)) setSearchResults(data);
+      } catch (e) {
+        console.error("Search error:", e);
+      } finally {
+        setIsSearchingBackend(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, workspaceId, projectId, receiverId]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -715,15 +749,21 @@ export default function ChatPane({
         className="flex-1 overflow-y-auto p-6 flex flex-col gap-5"
         ref={scrollRef}
       >
-        {messages
-          .filter(
-            (msg) =>
-              !searchQuery ||
-              msg.content.toLowerCase().includes(searchQuery.toLowerCase()),
-          )
-          .map((msg) => {
+        {isSearchingBackend && (
+          <div className="flex justify-center p-4">
+            <Loader2 className="animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {!isSearchingBackend && searchResults && searchResults.length === 0 && (
+          <div className="text-center p-4 text-muted-foreground text-sm">
+            No results found.
+          </div>
+        )}
+
+        {!isSearchingBackend &&
+          (searchResults || messages).map((msg) => {
             const isOwn = msg.senderId === user?.id;
-            const hasReactions = (msg.reactions?.length ?? 0) > 0;
 
             return (
               <div
