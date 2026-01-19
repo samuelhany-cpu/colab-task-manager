@@ -11,7 +11,9 @@ import {
   Loader2,
   LayoutGrid,
   ShieldCheck,
+  CheckCircle,
 } from "lucide-react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,7 +21,9 @@ import { Input } from "@/components/ui/input";
 export default function RegisterPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const emailRef = useRef("");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -30,6 +34,26 @@ export default function RegisterPage() {
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    emailRef.current = email;
+
+    const BLOCKED_DOMAINS = [
+      "example.com",
+      "test.com",
+      "mailinator.com",
+      "yopmail.com",
+      "temp-mail.org",
+      "tempmail.com",
+      "guerrillamail.com",
+    ];
+    const domain = email.split("@")[1]?.toLowerCase();
+
+    if (BLOCKED_DOMAINS.includes(domain)) {
+      setError(
+        "This email domain is not allowed for high-deliverability security. Please use a provider like Gmail, Outlook, or your company domain.",
+      );
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/register", {
@@ -44,13 +68,48 @@ export default function RegisterPage() {
         throw new Error(data.error || "Something went wrong");
       }
 
-      router.push("/login?registered=true");
+      setSuccess(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
   };
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6 relative overflow-hidden text-foreground">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2" />
+        <Card className="w-full max-w-md p-10 border-border/40 bg-card rounded-[2.5rem] shadow-2xl relative z-10 flex flex-col items-center text-center space-y-6">
+          <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center text-white shadow-xl shadow-primary/20 animate-in zoom-in duration-500">
+            <ShieldCheck size={40} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-3xl font-black tracking-tight">Success!</h2>
+            <p className="text-mutedForeground font-medium leading-relaxed">
+              Your account has been created. We&apos;ve sent a verification link
+              to{" "}
+              <span className="text-foreground font-bold">
+                {emailRef.current}
+              </span>
+            </p>
+          </div>
+          <Button
+            asChild
+            className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
+          >
+            <Link href="/login">
+              Continue to Login
+              <ArrowRight
+                size={20}
+                className="ml-2 group-hover:translate-x-1 transition-transform"
+              />
+            </Link>
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6 relative overflow-hidden text-foreground">

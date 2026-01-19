@@ -330,6 +330,7 @@ export default function Sidebar({
             isOpen={isGroupDMModalOpen}
             onClose={() => setIsGroupDMModalOpen(false)}
             workspaceId={workspaceId}
+            workspaceSlug={workspaceSlug}
             onCreated={(conv) => {
               setConversations((prev) => [conv, ...prev]);
             }}

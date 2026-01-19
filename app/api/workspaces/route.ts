@@ -14,12 +14,15 @@ const workspaceSchema = z.object({
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const includeProjects = searchParams.get("includeProjects") === "true";
+  console.log("[API/Workspaces] GET request received. Fetching user...");
   const user = await getCurrentUser();
 
   if (!user) {
+    console.warn("[API/Workspaces] GET request unauthorized: No user found.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  console.log(`[API/Workspaces] Fetching workspaces for user: ${user.id}`);
   const workspaces = await prisma.workspace.findMany({
     where: {
       members: {
@@ -57,6 +60,7 @@ export async function GET(req: Request) {
     },
   });
 
+  console.log(`[API/Workspaces] Found ${workspaces.length} workspaces.`);
   return NextResponse.json(workspaces);
 }
 

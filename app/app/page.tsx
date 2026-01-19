@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Layout, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Layout, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,25 +15,41 @@ interface Workspace {
 }
 
 export default function WorkspaceSelector() {
+  const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newWorkspace, setNewWorkspace] = useState({ name: "", slug: "" });
   const [creating, setCreating] = useState(false);
+  const [takingLong, setTakingLong] = useState(false);
 
   useEffect(() => {
     fetchWorkspaces();
+
+    const timer = setTimeout(() => {
+      if (loading) {
+        setTakingLong(true);
+      }
+    }, 8000); // 8 seconds timeout for "taking long" message
+
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchWorkspaces = async () => {
+    setError(null);
     try {
       const res = await fetch("/api/workspaces");
       if (res.ok) {
         const data = await res.json();
         setWorkspaces(data);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to load workspaces");
       }
     } catch (error) {
       console.error("Failed to fetch workspaces", error);
+      setError("Unable to connect to service. Please check your network.");
     } finally {
       setLoading(false);
     }
@@ -52,6 +69,11 @@ export default function WorkspaceSelector() {
         setWorkspaces([data, ...workspaces]);
         setShowCreate(false);
         setNewWorkspace({ name: "", slug: "" });
+        // Redirect to new workspace immediately for better UX
+        router.push(`/app/${data.slug}`);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to create workspace");
       }
     } catch (error) {
       console.error("Failed to create workspace", error);
@@ -60,11 +82,46 @@ export default function WorkspaceSelector() {
     }
   };
 
-  if (loading) {
+  if (loading || error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-        <Loader2 className="animate-spin text-primary" size={40} />
-        <p className="text-mutedForeground font-medium">Loading workspaces...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-6 p-6 text-center">
+        {loading ? (
+          <>
+            <div className="relative">
+              <Loader2 className="animate-spin text-primary" size={48} />
+              <div className="absolute inset-0 bg-primary/5 rounded-full blur-xl animate-pulse" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xl font-black tracking-tight">
+                Initializing Environment
+              </p>
+              <p className="text-mutedForeground font-medium max-w-xs mx-auto">
+                {takingLong
+                  ? "This is taking longer than usual... We're checking the status of your workspaces."
+                  : "Fetching your high-intensity workspaces..."}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center text-destructive mb-2">
+              <AlertCircle size={32} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xl font-black tracking-tight">System Notice</p>
+              <p className="text-mutedForeground font-medium max-w-xs mx-auto">
+                {error}
+              </p>
+            </div>
+            <Button
+              onClick={fetchWorkspaces}
+              variant="outline"
+              className="mt-4 rounded-xl font-bold h-12 px-8 border-border/50 hover:bg-muted"
+            >
+              Try Again
+            </Button>
+          </>
+        )}
       </div>
     );
   }
@@ -78,7 +135,8 @@ export default function WorkspaceSelector() {
             Welcome Back
           </h1>
           <p className="text-mutedForeground text-xl max-w-2xl mx-auto">
-            Select a workspace to start collaborating or create a brand new one for your team.
+            Select a workspace to start collaborating or create a brand new one
+            for your team.
           </p>
         </div>
 
@@ -93,7 +151,10 @@ export default function WorkspaceSelector() {
 
                 <div className="flex items-center gap-5">
                   <div className="w-14 h-14 flex items-center justify-center bg-primary/10 rounded-2xl group-hover:bg-primary group-hover:text-white transition-all duration-300">
-                    <Layout size={28} className="text-primary group-hover:text-white transition-colors" />
+                    <Layout
+                      size={28}
+                      className="text-primary group-hover:text-white transition-colors"
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-xl font-bold text-foreground truncate group-hover:text-primary transition-colors">
@@ -114,7 +175,10 @@ export default function WorkspaceSelector() {
             className="group relative p-6 h-full min-h-[140px] flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-mutedForeground/20 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
           >
             <div className="w-12 h-12 flex items-center justify-center rounded-full bg-muted group-hover:bg-primary group-hover:text-white transition-all duration-300">
-              <Plus size={24} className="text-mutedForeground group-hover:text-white group-hover:rotate-90 transition-all duration-300" />
+              <Plus
+                size={24}
+                className="text-mutedForeground group-hover:text-white group-hover:rotate-90 transition-all duration-300"
+              />
             </div>
             <span className="text-mutedForeground group-hover:text-primary font-bold text-sm tracking-wide transition-colors">
               CREATE WORKSPACE
@@ -128,8 +192,12 @@ export default function WorkspaceSelector() {
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
           <Card className="w-full max-w-md p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300 border-border/50">
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight">New Workspace</h2>
-              <p className="text-mutedForeground text-sm">Set up a name and slug for your team.</p>
+              <h2 className="text-2xl font-bold tracking-tight">
+                New Workspace
+              </h2>
+              <p className="text-mutedForeground text-sm">
+                Set up a name and slug for your team.
+              </p>
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4">

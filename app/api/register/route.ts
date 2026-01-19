@@ -3,9 +3,30 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
+const BLOCKED_DOMAINS = [
+  "example.com",
+  "test.com",
+  "mailinator.com",
+  "yopmail.com",
+  "temp-mail.org",
+  "tempmail.com",
+  "guerrillamail.com",
+];
+
+const isBlockedDomain = (email: string) => {
+  const domain = email.split("@")[1]?.toLowerCase();
+  return BLOCKED_DOMAINS.includes(domain);
+};
+
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
+  email: z
+    .string()
+    .email("Invalid email address")
+    .refine((email) => !isBlockedDomain(email), {
+      message:
+        "This email domain is not allowed. Please use a valid, non-disposable email address.",
+    }),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
@@ -29,6 +50,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Sign up user in Supabase
+    console.log(`[API/Register] Signing up user in Supabase: ${email}`);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -41,15 +63,11 @@ export async function POST(req: Request) {
     });
 
     if (authError) {
+      console.error(
+        `[API/Register] Supabase signup error: ${authError.message}`,
+      );
       return NextResponse.json({ error: authError.message }, { status: 400 });
     }
-    // The provided `catch` block is syntactically incorrect here as it cannot follow an `if` statement directly.
-    // Assuming the intent was to add more robust error handling around the signup process,
-    // but without a `try` block preceding it, this `catch` block cannot be placed here.
-    // The outer `try...catch` already handles general exceptions.
-    // For now, I will not insert the `catch` block as it would break syntax.
-    // If the intent was to replace the `if (authError)` with a `try...catch` around `supabase.auth.signUp`,
-    // that would require a different structural change.
 
     if (!authData.user) {
       return NextResponse.json(
@@ -59,6 +77,9 @@ export async function POST(req: Request) {
     }
 
     // 3. Sync with Prisma
+    console.log(
+      `[API/Register] Syncing with Prisma for user: ${authData.user.id}`,
+    );
     const user = await prisma.user.create({
       data: {
         id: authData.user.id,
@@ -67,6 +88,8 @@ export async function POST(req: Request) {
         email,
       },
     });
+
+    console.log(`[API/Register] Registration successful for: ${email}`);
 
     return NextResponse.json(
       {

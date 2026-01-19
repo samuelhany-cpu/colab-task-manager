@@ -19,6 +19,7 @@ interface GroupDMModalProps {
   isOpen: boolean;
   onClose: () => void;
   workspaceId: string;
+  workspaceSlug: string;
   onCreated: (conversation: ConversationWithMembers) => void;
 }
 
@@ -51,6 +52,7 @@ export default function GroupDMModal({
   isOpen,
   onClose,
   workspaceId,
+  workspaceSlug,
   onCreated,
 }: GroupDMModalProps) {
   const { user } = useUser();
@@ -81,10 +83,7 @@ export default function GroupDMModal({
           // Or generic search.
 
           // Let's implement a quick fetcher here.
-          const res = await fetch(`/api/workspaces/${workspaceId}/members`); // Hypothetical
-          // If that fails, we might need to fix it.
-          // For now, let's assume valid response.
-
+          const res = await fetch(`/api/workspaces/${workspaceSlug}/members`);
           if (res.ok) {
             const data = await res.json();
             // Filter out self

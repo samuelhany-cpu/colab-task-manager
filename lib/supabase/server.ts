@@ -56,6 +56,7 @@ export const getCurrentUser = cache(async () => {
   }
 
   if (!supabaseUser) {
+    console.warn("getCurrentUser: No Supabase user found in session.");
     return null;
   }
 
@@ -96,6 +97,12 @@ export const getCurrentUser = cache(async () => {
       console.error("getCurrentUser: Fail-safe creation failed:", syncError);
       return null;
     }
+  }
+
+  if (!user) {
+    console.warn(
+      `getCurrentUser: Final sync attempt failed for user ${supabaseUser.id}.`,
+    );
   }
 
   return user;
