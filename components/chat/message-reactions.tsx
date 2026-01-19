@@ -9,6 +9,7 @@ interface Reaction {
   user?: {
     id: string;
     email: string;
+    name?: string;
   };
 }
 
@@ -47,7 +48,7 @@ export default function MessageReactions({
         );
         const count = emojiReactions.length;
         const users = emojiReactions
-          .map((r) => r.user?.email || "Unknown")
+          .map((r) => r.user?.name || r.user?.email || "Unknown")
           .join(", ");
 
         return (

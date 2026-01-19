@@ -41,6 +41,13 @@ export async function GET(req: Request) {
           emoji: true,
           userId: true,
           createdAt: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
         },
       },
       _count: {
@@ -186,16 +193,20 @@ export async function POST(req: Request) {
       },
       include: {
         sender: { select: { id: true, name: true, image: true } },
-        reactions: true,
+        reactions: {
+          include: { user: { select: { id: true, name: true, email: true } } },
+        },
         _count: { select: { replies: true } },
       },
     });
 
-    // Broadcast (Non-blocking to prevent hangs)
+    // Broadcast (Non-blocking)
     (async () => {
       try {
         const { createClient } = await import("@/lib/supabase/server");
         const supabase = await createClient();
+
+        // 1. Broadcast new message to the specific channel
         const channelId = sanitized.parentId
           ? `thread:${sanitized.parentId}`
           : sanitized.workspaceId
@@ -211,6 +222,7 @@ export async function POST(req: Request) {
             payload: message,
           });
 
+          // DM Sync for sender
           if (
             !sanitized.workspaceId &&
             !sanitized.projectId &&
@@ -221,6 +233,38 @@ export async function POST(req: Request) {
               event: "new-message",
               payload: message,
             });
+          }
+        }
+
+        // 2. If it's a reply, broadcast update to the parent channel (so reply count updates in main view)
+        if (sanitized.parentId) {
+          const parentMessage = await prisma.message.findUnique({
+            where: { id: sanitized.parentId },
+            include: {
+              sender: { select: { id: true, name: true, image: true } },
+              reactions: {
+                include: {
+                  user: { select: { id: true, name: true, email: true } },
+                },
+              },
+              _count: { select: { replies: true } },
+            },
+          });
+
+          if (parentMessage) {
+            const parentChannelId = sanitized.workspaceId
+              ? `workspace:${sanitized.workspaceId}`
+              : sanitized.projectId
+                ? `project:${sanitized.projectId}`
+                : `user:${sanitized.receiverId || parentMessage.receiverId}`; // Fallback if needed
+
+            if (parentChannelId) {
+              await supabase.channel(parentChannelId).send({
+                type: "broadcast",
+                event: "message-updated",
+                payload: parentMessage,
+              });
+            }
           }
         }
       } catch (e) {
