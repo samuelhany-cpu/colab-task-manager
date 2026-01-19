@@ -115,7 +115,7 @@ export default function WorkspaceSelector() {
             </div>
             <Button
               onClick={fetchWorkspaces}
-              variant="outline"
+              variant="secondary"
               className="mt-4 rounded-xl font-bold h-12 px-8 border-border/50 hover:bg-muted"
             >
               Try Again
