@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         data: {
           full_name: name,
         },
-        emailRedirectTo: `${new URL(req.url).origin}/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin}/auth/callback`,
       },
     });
 
