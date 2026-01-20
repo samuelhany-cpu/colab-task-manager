@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Plus,
   MoreVertical,
@@ -12,28 +13,21 @@ import {
   ArrowUpDown,
   Edit,
   Trash2,
+  CheckCircle2,
 } from "lucide-react";
-import { getSocket } from "@/lib/socket-client";
+import { cn } from "@/lib/cn";
 import TaskModal from "./task-modal";
+import { Task } from "@/types/task";
 
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  status: "TODO" | "IN_PROGRESS" | "DONE";
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-  dueDate?: string;
-  assignee?: {
-    id: string;
-    name: string | null;
-    email: string | null;
-    image?: string | null;
-  };
-  _count: { comments: number };
-}
-
-export default function KanbanBoard({ projectId }: { projectId: string }) {
+export default function KanbanBoard({
+  projectId,
+  workspaceSlug,
+}: {
+  projectId: string;
+  workspaceSlug: string;
+}) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  // ... (rest of states remain same)
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [initialStatus, setInitialStatus] = useState<Task["status"]>("TODO");
@@ -45,6 +39,12 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
     null,
   );
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
+
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [availableTags, setAvailableTags] = useState<
+    { id: string; name: string; color: string }[]
+  >([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -59,19 +59,44 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
     }
   }, [projectId]);
 
+  const fetchTags = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceSlug}/tags`);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableTags(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch tags:", e);
+    }
+  }, [workspaceSlug]);
+
   useEffect(() => {
     fetchTasks();
-    const socket = getSocket();
-    socket.emit("join-project", projectId);
+    fetchTags();
 
-    socket.on("task-updated", () => {
-      fetchTasks();
+    const supabase = (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      return createClient();
+    })();
+
+    let channel: RealtimeChannel;
+
+    supabase.then((client) => {
+      channel = client
+        .channel(`project:${projectId}`)
+        .on("broadcast", { event: "task-updated" }, () => {
+          fetchTasks();
+        })
+        .subscribe();
     });
 
     return () => {
-      socket.off("task-updated");
+      if (channel) {
+        supabase.then((client) => client.removeChannel(channel));
+      }
     };
-  }, [projectId, fetchTasks]);
+  }, [projectId, fetchTasks, fetchTags]);
 
   // Separate effect for click-outside handling
   useEffect(() => {
@@ -97,7 +122,14 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
   const handleAddTask = (status: Task["status"] = "TODO") => {
     setInitialStatus(status);
+    setEditingTask(null);
     setIsModalOpen(true);
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+    setOpenMenuTaskId(null);
   };
 
   const handleDragStart = (e: React.DragEvent, task: Task) => {
@@ -146,10 +178,6 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
       if (!res.ok) {
         // Revert on error
         fetchTasks();
-      } else {
-        // Emit socket event
-        const socket = getSocket();
-        socket.emit("task-updated", { projectId, taskId: draggedTask.id });
       }
     } catch (error) {
       console.error("Failed to update task:", error);
@@ -162,21 +190,26 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("Are you sure you want to delete this task?")) return;
 
+    // Optimistic update
+    const previousTasks = [...tasks];
+    setTasks(tasks.filter((t) => t.id !== taskId));
+    setOpenMenuTaskId(null);
+
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: "DELETE",
       });
 
-      if (res.ok) {
-        setTasks(tasks.filter((t) => t.id !== taskId));
-        const socket = getSocket();
-        socket.emit("task-updated", { projectId, taskId });
+      if (!res.ok) {
+        // Revert on error
+        setTasks(previousTasks);
+        alert("Failed to delete task");
       }
     } catch (error) {
       console.error("Failed to delete task:", error);
+      setTasks(previousTasks);
       alert("Failed to delete task");
     }
-    setOpenMenuTaskId(null);
   };
 
   const toggleMenu = (e: React.MouseEvent, taskId: string) => {
@@ -221,6 +254,14 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
       filtered = filtered.filter((t) => t.priority === filterPriority);
     }
 
+    if (selectedTagIds.length > 0) {
+      filtered = filtered.filter((t) =>
+        selectedTagIds.every((tagId) =>
+          t.tags?.some((tag) => tag.id === tagId),
+        ),
+      );
+    }
+
     return filtered.sort((a, b) => {
       if (sortBy === "dueDate") {
         if (!a.dueDate) return 1;
@@ -241,24 +282,26 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
   if (loading) return <div className="p-8">Loading board...</div>;
 
   return (
-    <div className="board-container">
-      <div className="board-header">
-        <div className="header-left">
-          <h2>Project Board</h2>
-          <div className="board-controls">
-            <div className="search-box glass">
-              <Search size={16} />
+    <div className="p-8 h-full flex flex-col overflow-hidden">
+      <div className="flex justify-between items-center mb-8 shrink-0">
+        <div className="flex items-center gap-10">
+          <h2 className="text-2xl font-bold">Project Board</h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-4 py-2 bg-muted border border-border rounded-xl min-w-[200px]">
+              <Search size={16} className="text-mutedForeground" />
               <input
                 type="text"
                 placeholder="Search tasks..."
+                className="bg-transparent border-none text-foreground w-full outline-none text-sm placeholder:text-mutedForeground"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
-            <div className="filter-group glass">
-              <Filter size={16} />
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-xl">
+              <Filter size={16} className="text-mutedForeground" />
               <select
+                className="bg-transparent border-none text-foreground outline-none text-sm cursor-pointer"
                 value={filterPriority}
                 onChange={(e) => setFilterPriority(e.target.value)}
               >
@@ -270,9 +313,50 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
               </select>
             </div>
 
-            <div className="filter-group glass">
-              <ArrowUpDown size={16} />
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-xl">
+              <span className="text-mutedForeground text-xs font-bold uppercase tracking-wider">
+                Tags:
+              </span>
+              <div className="flex items-center gap-1.5 overflow-x-auto max-w-[200px] no-scrollbar">
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => {
+                      setSelectedTagIds((prev) =>
+                        prev.includes(tag.id)
+                          ? prev.filter((id) => id !== tag.id)
+                          : [...prev, tag.id],
+                      );
+                    }}
+                    className={cn(
+                      "text-[9px] font-black uppercase px-2 py-1 rounded-lg border transition-all whitespace-nowrap",
+                      selectedTagIds.includes(tag.id)
+                        ? "shadow-sm scale-105"
+                        : "opacity-40 grayscale hover:opacity-100 hover:grayscale-0",
+                    )}
+                    style={{
+                      color: tag.color,
+                      backgroundColor: `${tag.color}10`,
+                      borderColor: selectedTagIds.includes(tag.id)
+                        ? tag.color
+                        : "transparent",
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+                {availableTags.length === 0 && (
+                  <span className="text-[10px] text-mutedForeground italic">
+                    No tags
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-xl">
+              <ArrowUpDown size={16} className="text-mutedForeground" />
               <select
+                className="bg-transparent border-none text-foreground outline-none text-sm cursor-pointer"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
@@ -283,9 +367,9 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
             </div>
           </div>
         </div>
-        <div className="board-actions">
+        <div className="flex items-center">
           <button
-            className="create-task-btn primary-btn"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm shadow-soft hover:brightness-110 transition-all active:scale-95"
             onClick={() => handleAddTask("TODO")}
           >
             <Plus size={18} />
@@ -294,68 +378,75 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="kanban-grid">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto pb-4">
         {columns.map((column) => (
           <div
             key={column.status}
-            className={`kanban-column ${dragOverColumn === column.status ? "drag-over" : ""}`}
+            className={cn(
+              "flex flex-col bg-muted/30 rounded-2xl h-fit min-h-[200px] transition-all p-2",
+              dragOverColumn === column.status &&
+                "bg-primary/5 ring-2 ring-primary/50",
+            )}
             onDragOver={(e) => handleDragOver(e, column.status)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, column.status)}
           >
-            <div className="column-header">
-              <span className="column-title">{column.title}</span>
-              <span className="task-count">
+            <div className="flex items-center gap-3 mb-4 px-2 pt-2">
+              <span className="font-semibold text-[15px]">{column.title}</span>
+              <span className="bg-muted px-2 py-0.5 rounded-full text-[10px] font-bold text-mutedForeground">
                 {getFilteredAndSortedTasks(column.status).length}
               </span>
             </div>
 
-            <div className="task-list">
+            <div className="flex flex-col gap-3 overflow-y-auto flex-1 p-1">
               {getFilteredAndSortedTasks(column.status).map((task) => (
                 <div
                   key={task.id}
-                  className={`task-card glass ${draggedTask?.id === task.id ? "dragging" : ""}`}
+                  className={cn(
+                    "group relative p-4 rounded-xl border border-border bg-card text-card-foreground shadow-soft transition-all cursor-grab active:cursor-grabbing hover:-translate-y-1",
+                    draggedTask?.id === task.id && "opacity-50 scale-95",
+                  )}
                   draggable={openMenuTaskId !== task.id}
                   onDragStart={(e) => handleDragStart(e, task)}
                 >
                   <div
-                    className="task-priority-bar"
+                    className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full"
                     style={{ background: getPriorityColor(task.priority) }}
                   />
-                  <div className="task-content">
-                    <div className="task-top">
+                  <div className="flex flex-col">
+                    <div className="flex justify-between items-center mb-2">
                       <span
-                        className="task-priority"
+                        className="text-[10px] font-bold uppercase tracking-wider"
                         style={{ color: getPriorityColor(task.priority) }}
                       >
                         {task.priority}
                       </span>
                       <div
-                        className="task-menu"
+                        className="relative z-10"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
-                          className="task-more"
+                          className="p-1 rounded-md text-mutedForeground hover:bg-muted hover:text-foreground transition-all"
                           onClick={(e) => toggleMenu(e, task.id)}
                           type="button"
                         >
                           <MoreVertical size={14} />
                         </button>
                         {openMenuTaskId === task.id && (
-                          <div className="task-dropdown">
+                          <div className="absolute top-full right-0 mt-1 bg-card border border-border rounded-xl p-1 min-width-[150px] z-[100] shadow-soft backdrop-blur-md">
                             <button
-                              className="dropdown-item"
+                              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-foreground hover:bg-muted transition-all text-left"
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setOpenMenuTaskId(null);
+                                handleEditTask(task);
                               }}
                             >
                               <Edit size={14} />
                               <span>Edit Task</span>
                             </button>
                             <button
-                              className="dropdown-item delete"
+                              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-all text-left"
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -369,46 +460,63 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                         )}
                       </div>
                     </div>
-                    <h4 className="task-title">{task.title}</h4>
-                    <div className="task-meta">
+                    {/* Tags Display */}
+                    {task.tags && task.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {task.tags.map((tag) => (
+                          <div
+                            key={tag.id}
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-current/20 flex items-center"
+                            style={{
+                              color: tag.color,
+                              backgroundColor: `${tag.color}10`,
+                            }}
+                          >
+                            {tag.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <h4 className="text-[15px] font-semibold mb-4 leading-normal">
+                      {task.title}
+                    </h4>
+                    <div className="flex items-center gap-4 text-mutedForeground text-[11px]">
                       {task.dueDate && (
-                        <div className="meta-item">
+                        <div className="flex items-center gap-1.5">
                           <Calendar size={12} />
                           <span>
                             {new Date(task.dueDate).toLocaleDateString()}
                           </span>
                         </div>
                       )}
-                      <div className="meta-stats">
-                        <div className="meta-item">
-                          <MessageCircle size={12} />
-                          <span>{task._count.comments}</span>
-                        </div>
+                      <div className="flex items-center gap-1.5">
+                        <MessageCircle size={12} />
+                        <span>{task._count?.comments || 0}</span>
                       </div>
-                      <div className="assignee">
+                      {task._count?.subtasks !== undefined &&
+                        task._count.subtasks > 0 && (
+                          <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-primary/10 text-primary rounded-md">
+                            <CheckCircle2 size={11} />
+                            <span className="font-bold">
+                              {task.subtasks?.filter((s) => s.completed)
+                                .length || 0}
+                              /{task._count.subtasks}
+                            </span>
+                          </div>
+                        )}
+                      <div className="ml-auto">
                         {task.assignee ? (
                           task.assignee.image ? (
                             <div
-                              className="avatar small"
+                              className="w-6 h-6 rounded-full border border-border bg-primary flex items-center justify-center text-[10px] font-bold text-white overflow-hidden shadow-soft"
                               style={{
                                 backgroundImage: `url(${task.assignee.image})`,
                                 backgroundSize: "cover",
                               }}
-                              title={
-                                task.assignee.name ||
-                                task.assignee.email ||
-                                "Assigned"
-                              }
                             />
                           ) : (
-                            <div
-                              className="avatar small"
-                              title={
-                                task.assignee.name ||
-                                task.assignee.email ||
-                                "Assigned"
-                              }
-                            >
+                            <div className="w-6 h-6 rounded-full border border-border bg-primary flex items-center justify-center text-[10px] font-bold text-white shadow-soft">
                               {(task.assignee.name ||
                                 task.assignee.email ||
                                 "?")[0].toUpperCase()}
@@ -417,8 +525,7 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                         ) : (
                           <UserIcon
                             size={14}
-                            className="text-gray-400"
-                            title="Unassigned"
+                            className="text-mutedForeground opacity-50"
                           />
                         )}
                       </div>
@@ -427,10 +534,13 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
                 </div>
               ))}
               <button
-                className="add-card-btn"
+                className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-border text-mutedForeground text-sm hover:border-primary/50 hover:text-primary transition-all group mt-1"
                 onClick={() => handleAddTask(column.status)}
               >
-                <Plus size={16} />
+                <Plus
+                  size={16}
+                  className="group-hover:scale-110 transition-transform"
+                />
                 <span>Add Task</span>
               </button>
             </div>
@@ -440,290 +550,37 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
       <TaskModal
         projectId={projectId}
+        workspaceSlug={workspaceSlug}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialStatus={initialStatus}
-        onTaskCreated={() => fetchTasks()}
+        task={editingTask}
+        onTaskCreated={(newTask) => {
+          if (newTask) {
+            const taskWithDefaults: Task = {
+              ...newTask,
+              tags: newTask.tags || [],
+              _count: newTask._count || { comments: 0 },
+            };
+            setTasks((prev) => [...prev, taskWithDefaults]);
+          } else {
+            fetchTasks();
+          }
+        }}
+        onTaskUpdated={(updatedTask) => {
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === updatedTask.id
+                ? ({
+                    ...updatedTask,
+                    tags: updatedTask.tags || [],
+                    _count: t._count,
+                  } as Task)
+                : t,
+            ),
+          );
+        }}
       />
-
-      <style jsx>{`
-        .board-container {
-          padding: 2rem;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-        .board-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 2rem;
-          flex-shrink: 0;
-        }
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 2.5rem;
-        }
-        .board-controls {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        .search-box {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.5rem 1rem;
-          border-radius: 0.75rem;
-          min-width: 200px;
-        }
-        .search-box input {
-          background: transparent;
-          border: none;
-          color: white;
-          width: 100%;
-          outline: none;
-          font-size: 0.875rem;
-        }
-        .filter-group {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.5rem 0.75rem;
-          border-radius: 0.75rem;
-        }
-        .filter-group select {
-          background: transparent;
-          border: none;
-          color: white;
-          outline: none;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        .filter-group select option {
-          background: #1e293b;
-        }
-        h2 {
-          font-size: 1.5rem;
-          font-weight: 700;
-        }
-        .kanban-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1.5rem;
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-          padding-bottom: 1rem;
-        }
-        .kanban-column {
-          display: flex;
-          flex-direction: column;
-          background: rgba(30, 41, 59, 0.4);
-          border-radius: 1rem;
-          transition:
-            background 0.2s ease,
-            box-shadow 0.2s ease;
-          height: fit-content;
-          min-height: 200px;
-        }
-        .kanban-column.drag-over {
-          background: rgba(139, 92, 246, 0.1);
-          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.5);
-          padding: 1rem;
-        }
-        .column-header {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
-          padding: 0 0.5rem;
-        }
-        .column-title {
-          font-weight: 600;
-          font-size: 0.9375rem;
-        }
-        .task-count {
-          background: rgba(255, 255, 255, 0.1);
-          padding: 0.125rem 0.5rem;
-          border-radius: 1rem;
-          font-size: 0.75rem;
-          color: var(--muted-foreground);
-        }
-        .task-list {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          overflow-y: auto;
-          flex: 1;
-          padding: 0.25rem;
-        }
-        .task-card {
-          position: relative;
-          padding: 1rem;
-          border-radius: 0.75rem;
-          cursor: grab;
-          transition:
-            transform 0.1s,
-            opacity 0.2s;
-        }
-        .task-card:active {
-          cursor: grabbing;
-        }
-        .task-card.dragging {
-          opacity: 0.5;
-          transform: scale(0.95);
-        }
-        .task-card:hover {
-          transform: translateY(-2px);
-          background: rgba(30, 41, 59, 1);
-        }
-        .task-card.dragging:hover {
-          transform: scale(0.95);
-        }
-        .task-priority-bar {
-          position: absolute;
-          left: 0;
-          top: 1rem;
-          bottom: 1rem;
-          width: 3px;
-          border-radius: 0 2px 2px 0;
-        }
-        .task-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 0.5rem;
-        }
-        .task-menu {
-          position: relative;
-          z-index: 5;
-        }
-        .task-more {
-          padding: 0.25rem;
-          border-radius: 0.375rem;
-          color: var(--muted-foreground);
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          position: relative;
-          z-index: 2;
-        }
-        .task-more:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-        }
-        .task-dropdown {
-          position: absolute;
-          top: 100%;
-          right: 0;
-          margin-top: 0.25rem;
-          background: rgba(30, 41, 59, 0.98);
-          border: 1px solid var(--border);
-          border-radius: 0.5rem;
-          padding: 0.5rem;
-          min-width: 150px;
-          z-index: 100;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-          backdrop-filter: blur(8px);
-        }
-        .dropdown-item {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          width: 100%;
-          padding: 0.625rem 0.75rem;
-          border-radius: 0.375rem;
-          color: var(--foreground);
-          font-size: 0.875rem;
-          transition: background 0.2s ease;
-          text-align: left;
-          cursor: pointer;
-          border: none;
-          background: transparent;
-        }
-        .dropdown-item:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-        .dropdown-item.delete {
-          color: #ef4444;
-        }
-        .dropdown-item.delete:hover {
-          background: rgba(239, 68, 68, 0.1);
-        }
-        .task-priority {
-          font-size: 0.625rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        .task-title {
-          font-size: 0.9375rem;
-          font-weight: 500;
-          margin-bottom: 1rem;
-          line-height: 1.4;
-        }
-        .task-meta {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          color: var(--muted-foreground);
-          font-size: 0.75rem;
-        }
-        .meta-item {
-          display: flex;
-          align-items: center;
-          gap: 0.375rem;
-        }
-        .assignee {
-          margin-left: auto;
-        }
-        .avatar.small {
-          width: 24px;
-          height: 24px;
-          font-size: 0.625rem;
-          background: var(--primary);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 600;
-          object-fit: cover;
-          cursor: pointer;
-        }
-        img.avatar.small {
-          object-fit: cover;
-        }
-        .add-card-btn {
-          width: 100%;
-          padding: 0.75rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          color: var(--muted-foreground);
-          font-size: 0.875rem;
-          justify-content: center;
-        }
-        .add-card-btn:hover {
-          color: var(--foreground);
-        }
-        .primary-btn {
-          padding: 0.5rem 1rem;
-          background: var(--primary);
-          color: white;
-          border-radius: 0.5rem;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-        }
-      `}</style>
     </div>
   );
 }

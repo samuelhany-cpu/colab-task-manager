@@ -1,8 +1,8 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { notifyTaskAssigned } from "@/lib/notifications";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -12,11 +12,12 @@ const taskSchema = z.object({
   dueDate: z.string().optional().nullable(),
   projectId: z.string().min(1, "Project ID is required"),
   assigneeId: z.string().optional().nullable(),
+  tagIds: z.array(z.string()).optional(),
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -33,7 +34,7 @@ export async function GET(req: Request) {
   const membership = await prisma.projectMember.findFirst({
     where: {
       projectId,
-      userId: (session.user as { id: string }).id,
+      userId: user.id,
     },
   });
 
@@ -47,8 +48,15 @@ export async function GET(req: Request) {
       assignee: {
         select: { id: true, name: true, email: true, image: true },
       },
+      tags: {
+        select: { id: true, name: true, color: true },
+      },
+      subtasks: true,
       _count: {
-        select: { comments: true },
+        select: {
+          comments: true,
+          subtasks: true,
+        },
       },
     },
     orderBy: { position: "asc" },
@@ -58,23 +66,24 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const body = await req.json();
-    const data = taskSchema.parse(body);
+    const { tagIds, ...data } = taskSchema.parse(body);
 
-    // Check project membership
-    const membership = await prisma.projectMember.findFirst({
-      where: {
-        projectId: data.projectId,
-        userId: (session.user as { id: string }).id,
+    // Check project membership and get workspace slug
+    const project = await prisma.project.findUnique({
+      where: { id: data.projectId },
+      include: {
+        members: { where: { userId: user.id } },
+        workspace: { select: { slug: true } },
       },
     });
 
-    if (!membership) {
+    if (!project || project.members.length === 0) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -90,8 +99,20 @@ export async function POST(req: Request) {
       data: {
         ...data,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        creatorId: (session.user as { id: string }).id,
+        creatorId: user.id,
         position,
+        tags: tagIds
+          ? {
+              connect: tagIds.map((id) => ({ id })),
+            }
+          : undefined,
+      },
+      include: {
+        tags: true,
+        subtasks: true,
+        _count: {
+          select: { subtasks: true, comments: true },
+        },
       },
     });
 
@@ -100,9 +121,33 @@ export async function POST(req: Request) {
       data: {
         type: "CREATED",
         taskId: task.id,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
+
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.channel(`project:${data.projectId}`).send({
+      type: "broadcast",
+      event: "task-updated",
+      payload: { projectId: data.projectId, taskId: task.id, type: "CREATED" },
+    });
+
+    // Send notification if task has assignee
+    if (data.assigneeId && data.assigneeId !== user.id) {
+      try {
+        await notifyTaskAssigned(
+          data.assigneeId,
+          task.title,
+          task.id,
+          task.projectId,
+          project.workspace.slug,
+        );
+      } catch (notificationError) {
+        console.error("Failed to send notification:", notificationError);
+      }
+    }
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
@@ -117,8 +162,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -132,7 +177,7 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const task = await prisma.task.findUnique({
       where: { id: taskId },
-      include: { project: true },
+      include: { project: true, tags: true },
     });
 
     if (!task) {
@@ -143,7 +188,7 @@ export async function PATCH(req: Request) {
     const membership = await prisma.projectMember.findFirst({
       where: {
         projectId: task.projectId,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
 
@@ -151,8 +196,11 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Handle position update specifically
-    if (body.position !== undefined || body.status !== undefined) {
+    // Handle position/status update Specifically (e.g. drag & drop)
+    if (
+      (body.position !== undefined || body.status !== undefined) &&
+      body.tagIds === undefined
+    ) {
       const updatedTask = await prisma.task.update({
         where: { id: taskId },
         data: {
@@ -166,16 +214,26 @@ export async function PATCH(req: Request) {
           data: {
             type: "STATUS_CHANGE",
             taskId,
-            userId: (session.user as { id: string }).id,
+            userId: user.id,
             metadata: { from: task.status, to: body.status },
           },
         });
       }
 
+      // Broadcast via Supabase Realtime
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = await createClient();
+      await supabase.channel(`project:${task.projectId}`).send({
+        type: "broadcast",
+        event: "task-updated",
+        payload: { projectId: task.projectId, taskId, type: "UPDATED" },
+      });
+
       return NextResponse.json(updatedTask);
     }
 
-    const updateData = taskSchema.partial().parse(body);
+    const { tagIds, ...updateData } = taskSchema.partial().parse(body);
+
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
       data: {
@@ -186,7 +244,31 @@ export async function PATCH(req: Request) {
             : updateData.dueDate
               ? new Date(updateData.dueDate)
               : undefined,
+        tags: tagIds
+          ? {
+              set: tagIds.map((id) => ({ id })),
+            }
+          : undefined,
       },
+      include: {
+        tags: true,
+        subtasks: true,
+        assignee: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+        _count: {
+          select: { subtasks: true, comments: true },
+        },
+      },
+    });
+
+    // Broadcast via Supabase Realtime
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    await supabase.channel(`project:${task.projectId}`).send({
+      type: "broadcast",
+      event: "task-updated",
+      payload: { projectId: task.projectId, taskId, type: "UPDATED" },
     });
 
     return NextResponse.json(updatedTask);

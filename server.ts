@@ -60,6 +60,18 @@ app.prepare().then(() => {
       },
     );
 
+    // Send notification to specific user
+    socket.on(
+      "send-notification",
+      (data: { userId: string; notification: unknown }) => {
+        io.to(`user:${data.userId}`).emit(
+          "new-notification",
+          data.notification,
+        );
+        console.log(`Notification sent to user:${data.userId}`);
+      },
+    );
+
     socket.on("disconnect", () => {
       console.log("Client disconnected:", socket.id);
     });

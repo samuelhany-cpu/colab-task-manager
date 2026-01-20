@@ -1,6 +1,5 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -11,25 +10,40 @@ const projectSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const workspaceId = searchParams.get("workspaceId");
+  const workspaceSlug = searchParams.get("workspaceSlug");
 
-  if (!workspaceId) {
+  if (!workspaceId && !workspaceSlug) {
     return NextResponse.json(
-      { error: "Workspace ID is required" },
+      { error: "Workspace ID or Slug is required" },
       { status: 400 },
     );
+  }
+
+  let finalWorkspaceId = workspaceId;
+  if (!finalWorkspaceId && workspaceSlug) {
+    const workspace = await prisma.workspace.findUnique({
+      where: { slug: workspaceSlug },
+    });
+    if (!workspace) {
+      return NextResponse.json(
+        { error: "Workspace not found" },
+        { status: 404 },
+      );
+    }
+    finalWorkspaceId = workspace.id;
   }
 
   // Check if user is member of the workspace
   const membership = await prisma.workspaceMember.findFirst({
     where: {
-      workspaceId,
-      userId: (session.user as { id: string }).id,
+      workspaceId: finalWorkspaceId as string,
+      userId: user.id,
     },
   });
 
@@ -38,7 +52,7 @@ export async function GET(req: Request) {
   }
 
   const projects = await prisma.project.findMany({
-    where: { workspaceId },
+    where: { workspaceId: finalWorkspaceId as string },
     include: {
       members: {
         include: {
@@ -58,8 +72,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
@@ -70,7 +84,7 @@ export async function POST(req: Request) {
     const membership = await prisma.workspaceMember.findFirst({
       where: {
         workspaceId,
-        userId: (session.user as { id: string }).id,
+        userId: user.id,
       },
     });
 
@@ -85,7 +99,7 @@ export async function POST(req: Request) {
         workspaceId,
         members: {
           create: {
-            userId: (session.user as { id: string }).id,
+            userId: user.id,
             role: "OWNER",
           },
         },

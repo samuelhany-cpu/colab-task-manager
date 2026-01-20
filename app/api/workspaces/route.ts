@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -12,22 +11,33 @@ const workspaceSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
 });
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const includeProjects = searchParams.get("includeProjects") === "true";
+  console.log("[API/Workspaces] GET request received. Fetching user...");
+  const user = await getCurrentUser();
 
-  if (!session) {
+  if (!user) {
+    console.warn("[API/Workspaces] GET request unauthorized: No user found.");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  console.log(`[API/Workspaces] Fetching workspaces for user: ${user.id}`);
   const workspaces = await prisma.workspace.findMany({
     where: {
       members: {
         some: {
-          userId: (session.user as { id: string }).id,
+          userId: user.id,
         },
       },
     },
     include: {
+      invitations: {
+        where: {
+          acceptedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      },
       members: {
         include: {
           user: {
@@ -40,19 +50,30 @@ export async function GET() {
           },
         },
       },
+      ...(includeProjects
+        ? {
+            projects: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          }
+        : {}),
     },
     orderBy: {
       createdAt: "desc",
     },
   });
 
+  console.log(`[API/Workspaces] Found ${workspaces.length} workspaces.`);
   return NextResponse.json(workspaces);
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -75,10 +96,10 @@ export async function POST(req: Request) {
       data: {
         name,
         slug,
-        ownerId: (session.user as { id: string }).id,
+        ownerId: user.id,
         members: {
           create: {
-            userId: (session.user as { id: string }).id,
+            userId: user.id,
             role: "OWNER",
           },
         },

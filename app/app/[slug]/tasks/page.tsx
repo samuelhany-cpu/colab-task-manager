@@ -1,14 +1,23 @@
 "use client";
 
-import { useState, useEffect, use, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { use, useState, useEffect, useCallback } from "react";
+
+import { useUser } from "@/components/providers/user-provider";
+import { createClient } from "@/lib/supabase/client";
 import {
   CheckSquare,
   AlertCircle,
   Calendar as CalendarIcon,
   Search,
+  ArrowLeft,
+  Loader2,
+  Filter,
 } from "lucide-react";
-import { getSocket } from "@/lib/socket-client";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Task {
   id: string;
@@ -28,7 +37,9 @@ export default function MyTasksPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const { data: session } = useSession();
+  const supabase = createClient();
+  const { user } = useUser();
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -48,21 +59,22 @@ export default function MyTasksPage({
   }, [slug]);
 
   useEffect(() => {
-    if (slug && session?.user) {
+    if (slug && user) {
       fetchMyTasks();
 
-      // Set up socket listeners for real-time updates
-      const socket = getSocket();
-
-      socket.on("task-updated", () => {
-        fetchMyTasks();
-      });
+      // Listen for updates related to user's tasks
+      const channel = supabase
+        .channel(`user:${user.id}`)
+        .on("broadcast", { event: "task-updated" }, () => {
+          fetchMyTasks();
+        })
+        .subscribe();
 
       return () => {
-        socket.off("task-updated");
+        supabase.removeChannel(channel);
       };
     }
-  }, [slug, session, fetchMyTasks]);
+  }, [slug, user, supabase, fetchMyTasks]);
 
   const filteredTasks = tasks.filter(
     (t) =>
@@ -70,229 +82,182 @@ export default function MyTasksPage({
       t.project.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  if (loading) return <div className="p-8">Loading your tasks...</div>;
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "done":
+        return "bg-green-500/10 text-green-600 border-green-200";
+      case "in_progress":
+        return "bg-blue-500/10 text-blue-600 border-blue-200";
+      default:
+        return "bg-slate-500/10 text-slate-600 border-slate-200";
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority.toLowerCase()) {
+      case "urgent":
+        return "text-red-600";
+      case "high":
+        return "text-amber-600";
+      case "medium":
+        return "text-blue-600";
+      default:
+        return "text-slate-500";
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-medium text-mutedForeground">
+          Loading your tasks...
+        </p>
+      </div>
+    );
 
   return (
-    <div className="tasks-container">
-      <header className="page-header">
-        <div>
-          <h1 className="gradient-text">My Tasks</h1>
-          <p className="subtitle">
-            You have {tasks.length} tasks assigned to you in this workspace.
-          </p>
-        </div>
-        <div className="header-actions">
-          <div className="search-bar glass">
-            <Search size={18} />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+    <div className="min-h-screen bg-muted/30 p-8 space-y-8 animate-in fade-in duration-700">
+      <header className="max-w-6xl mx-auto space-y-4">
+        <Link
+          href={`/app/${slug}`}
+          className="inline-flex items-center gap-2 text-xs font-black text-mutedForeground hover:text-primary transition-colors group"
+        >
+          <ArrowLeft
+            size={14}
+            className="group-hover:-translate-x-1 transition-transform"
+          />
+          BACK TO DASHBOARD
+        </Link>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div className="space-y-1">
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
+              My Tasks
+            </h1>
+            <p className="text-mutedForeground text-lg font-medium">
+              You have {tasks.length} tasks assigned to you in{" "}
+              <span className="text-foreground font-bold">{slug}</span>.
+            </p>
+          </div>
+          <div className="flex gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-80">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground"
+                size={18}
+              />
+              <Input
+                placeholder="Search tasks or projects..."
+                className="pl-10 h-11 rounded-xl bg-card border-border/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              className="rounded-xl font-bold h-11 gap-2"
+            >
+              <Filter size={18} />
+              <span>Filters</span>
+            </Button>
           </div>
         </div>
       </header>
 
-      <div className="tasks-list glass">
-        {filteredTasks.length > 0 ? (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Task Name</th>
-                  <th>Project</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Due Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTasks.map((task) => (
-                  <tr key={task.id} className="task-row">
-                    <td>
-                      <div className="task-title-cell">
-                        <CheckSquare size={16} className="task-icon" />
-                        <span>{task.title}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="project-badge">{task.project.name}</span>
-                    </td>
-                    <td>
-                      <span
-                        className={`status-badge ${task.status.toLowerCase()}`}
-                      >
-                        {task.status.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`priority-badge ${task.priority.toLowerCase()}`}
-                      >
-                        {task.priority}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="date-cell">
-                        <CalendarIcon size={14} />
-                        <span>
+      <main className="max-w-6xl mx-auto">
+        <Card className="rounded-2xl border-border/40 shadow-sm bg-card overflow-hidden">
+          {filteredTasks.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border/50">
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Task Detail
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Project
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-center">
+                      Status
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-center">
+                      Priority
+                    </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">
+                      Due Date
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {filteredTasks.map((task) => (
+                    <tr
+                      key={task.id}
+                      className="group hover:bg-muted/10 transition-colors"
+                    >
+                      <td className="p-5">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
+                            <CheckSquare size={20} />
+                          </div>
+                          <span className="font-bold text-foreground group-hover:text-primary transition-colors">
+                            {task.title}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-5">
+                        <Badge
+                          variant="secondary"
+                          className="bg-muted text-[10px] font-bold uppercase tracking-wider px-3 py-1"
+                        >
+                          {task.project.name}
+                        </Badge>
+                      </td>
+                      <td className="p-5 text-center">
+                        <Badge
+                          variant="outline"
+                          className={`px-3 py-1 text-[10px] font-black uppercase tracking-widest border ${getStatusColor(task.status)}`}
+                        >
+                          {task.status.replace("_", " ")}
+                        </Badge>
+                      </td>
+                      <td className="p-5 text-center">
+                        <span
+                          className={`text-xs font-black uppercase tracking-widest ${getPriorityColor(task.priority)}`}
+                        >
+                          {task.priority}
+                        </span>
+                      </td>
+                      <td className="p-5 text-right text-sm font-bold text-mutedForeground/60">
+                        <div className="flex items-center justify-end gap-2">
+                          <CalendarIcon size={14} />
                           {task.dueDate
                             ? new Date(task.dueDate).toLocaleDateString()
                             : "No date"}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">
-            <AlertCircle size={48} />
-            <h3>No tasks found</h3>
-            <p>
-              You don&apos;t have any tasks assigned that match your criteria.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <style jsx>{`
-        .tasks-container {
-          padding: 3rem;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        .page-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          margin-bottom: 2rem;
-        }
-        h1 {
-          font-size: 2.5rem;
-          font-weight: 800;
-          margin-bottom: 0.5rem;
-        }
-        .subtitle {
-          color: var(--muted-foreground);
-        }
-        .search-bar {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.6rem 1rem;
-          border-radius: 0.75rem;
-          width: 300px;
-        }
-        .search-bar input {
-          background: none;
-          border: none;
-          color: white;
-          width: 100%;
-          outline: none;
-        }
-        .tasks-list {
-          border-radius: 1.25rem;
-          overflow: hidden;
-        }
-        .table-wrapper {
-          overflow-x: auto;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          text-align: left;
-        }
-        th {
-          padding: 1.25rem 1.5rem;
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--muted-foreground);
-          border-bottom: 1px solid var(--border);
-        }
-        td {
-          padding: 1.25rem 1.5rem;
-          border-bottom: 1px solid var(--border);
-        }
-        .task-row:hover {
-          background: rgba(255, 255, 255, 0.02);
-        }
-        .task-title-cell {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          font-weight: 500;
-        }
-        .task-icon {
-          color: var(--primary);
-        }
-        .project-badge {
-          font-size: 0.75rem;
-          padding: 0.25rem 0.6rem;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 100px;
-          color: var(--muted-foreground);
-        }
-        .status-badge {
-          font-size: 0.7rem;
-          font-weight: 700;
-          padding: 0.25rem 0.6rem;
-          border-radius: 6px;
-          text-transform: uppercase;
-        }
-        .status-badge.todo {
-          background: rgba(148, 163, 184, 0.1);
-          color: #94a3b8;
-        }
-        .status-badge.in_progress {
-          background: rgba(59, 130, 246, 0.1);
-          color: #3b82f6;
-        }
-        .status-badge.done {
-          background: rgba(16, 185, 129, 0.1);
-          color: #10b981;
-        }
-        .priority-badge {
-          font-size: 0.75rem;
-          font-weight: 600;
-        }
-        .priority-badge.urgent {
-          color: #ef4444;
-        }
-        .priority-badge.high {
-          color: #f59e0b;
-        }
-        .priority-badge.medium {
-          color: #3b82f6;
-        }
-        .priority-badge.low {
-          color: #94a3b8;
-        }
-        .date-cell {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-          color: var(--muted-foreground);
-        }
-        .empty-state {
-          padding: 5rem;
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1rem;
-          color: var(--muted-foreground);
-        }
-        .empty-state h3 {
-          color: white;
-          margin-top: 1rem;
-        }
-      `}</style>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-24 flex flex-col items-center justify-center text-center space-y-6 opacity-40">
+              <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center text-mutedForeground">
+                <AlertCircle size={48} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-foreground">
+                  No tasks found
+                </h3>
+                <p className="text-mutedForeground max-w-sm mx-auto">
+                  {search
+                    ? `No tasks match your search for "${search}".`
+                    : "You don't have any tasks assigned in this workspace yet."}
+                </p>
+              </div>
+            </div>
+          )}
+        </Card>
+      </main>
     </div>
   );
 }

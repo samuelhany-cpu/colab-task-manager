@@ -1,93 +1,80 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, NotificationType } from "@prisma/client";
 
+// GET /api/notifications - Fetch user notifications
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const type = searchParams.get("type");
-  const unreadOnly = searchParams.get("unreadOnly") === "true";
+  }
 
   try {
-    const userId = (session.user as { id: string }).id;
+    const { searchParams } = new URL(req.url);
+    const filter = searchParams.get("filter"); // 'all', 'unread', or specific type
+    const limit = parseInt(searchParams.get("limit") || "50");
 
-    const where: { userId: string; type?: string; read?: boolean } = { userId };
-    if (type) where.type = type;
-    if (unreadOnly) where.read = false;
+    const where: Prisma.NotificationWhereInput = { userId: user.id };
+
+    if (filter === "unread") {
+      where.read = false;
+    } else if (filter && filter !== "all") {
+      where.type = filter as NotificationType;
+    }
 
     const notifications = await prisma.notification.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: limit,
     });
 
     const unreadCount = await prisma.notification.count({
-      where: { userId, read: false },
+      where: { userId: user.id, read: false },
     });
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (error) {
     console.error("Error fetching notifications:", error);
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: "Failed to fetch notifications" },
       { status: 500 },
     );
   }
 }
 
-export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+// POST /api/notifications - Create notification (internal/testing)
+export async function POST(req: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  try {
-    const userId = (session.user as { id: string }).id;
-    const { action } = await req.json();
-
-    if (action === "read-all") {
-      await prisma.notification.updateMany({
-        where: { userId, read: false },
-        data: { read: true },
-      });
-
-      return NextResponse.json({ success: true });
-    }
-
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error) {
-    console.error("Error updating notifications:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
   }
-}
-
-export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const userId = (session.user as { id: string }).id;
-    const { searchParams } = new URL(req.url);
-    const deleteAll = searchParams.get("all") === "true";
+    const body = await req.json();
+    const { type, content, link, userId } = body;
 
-    if (deleteAll) {
-      await prisma.notification.deleteMany({
-        where: { userId },
-      });
+    if (!type || !content || !userId) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
-    return NextResponse.json({ success: true });
+    const notification = await prisma.notification.create({
+      data: {
+        type,
+        content,
+        link,
+        userId,
+      },
+    });
+
+    return NextResponse.json(notification, { status: 201 });
   } catch (error) {
-    console.error("Error deleting notifications:", error);
+    console.error("Error creating notification:", error);
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: "Failed to create notification" },
       { status: 500 },
     );
   }

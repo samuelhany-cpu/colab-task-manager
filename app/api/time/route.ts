@@ -1,6 +1,5 @@
+import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -9,16 +8,20 @@ const timeEntrySchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
   note: z.string().optional(),
+  isBillable: z.boolean().default(true),
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = (session.user as { id: string }).id;
+  const userId = user.id;
   const { searchParams } = new URL(req.url);
   const taskId = searchParams.get("taskId");
+  const projectId = searchParams.get("projectId");
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
 
   // Get active timer for user
   const activeTimer = await prisma.timer.findUnique({
@@ -26,17 +29,38 @@ export async function GET(req: Request) {
     include: { task: true },
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { userId };
+
   if (taskId) {
-    const entries = await prisma.timeEntry.findMany({
-      where: { taskId, userId },
-      orderBy: { startTime: "desc" },
-    });
-    return NextResponse.json({ entries, activeTimer });
+    where.taskId = taskId;
+  }
+
+  if (projectId) {
+    where.task = {
+      projectId: projectId,
+    };
+  }
+
+  if (startDate || endDate) {
+    where.startTime = {};
+    if (startDate) {
+      where.startTime.gte = new Date(startDate);
+    }
+    if (endDate) {
+      where.startTime.lte = new Date(endDate);
+    }
   }
 
   const entries = await prisma.timeEntry.findMany({
-    where: { userId },
+    where,
     include: {
+      user: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
       task: {
         include: {
           project: true,
@@ -50,11 +74,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session)
+  const user = await getCurrentUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userId = (session.user as { id: string }).id;
+  const userId = user.id;
 
   try {
     const body = await req.json();

@@ -1,14 +1,17 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id            String    @id @default(cuid())
+  supabaseId    String?   @unique
   name          String?
   email         String?   @unique
   emailVerified DateTime?
@@ -30,6 +33,38 @@ model User {
   sentMessages      Message[]         @relation("SentMessages")
   receivedMessages  Message[]         @relation("ReceivedMessages")
   notifications     Notification[]
+  reactions         Reaction[]
+  fileVersions      FileVersion[]
+  messageReads      MessageRead[]
+  conversationMemberships ConversationMember[]
+  invitationsSent     Invitation[]      @relation("SentInvitations")
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String?
+  isGroup     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ConversationMember[]
+  messages  Message[]
+}
+
+model ConversationMember {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
 }
 
 model Workspace {
@@ -43,6 +78,10 @@ model Workspace {
 
   members  WorkspaceMember[]
   projects Project[]
+  tags     Tag[]
+  messages Message[]
+  conversations Conversation[]
+  invitations Invitation[]
 }
 
 model WorkspaceMember {
@@ -56,6 +95,7 @@ model WorkspaceMember {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
+  @@index([userId])
 }
 
 enum Role {
@@ -76,6 +116,7 @@ model Project {
   members   ProjectMember[]
   tasks     Task[]
   files     File[]
+  folders   Folder[]
   messages  Message[]
 }
 
@@ -95,6 +136,7 @@ model ProjectMember {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model Task {
@@ -114,11 +156,29 @@ model Task {
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee    User?       @relation("TaskAssignee", fields: [assigneeId], references: [id])
   creator     User        @relation("TaskCreator", fields: [creatorId], references: [id])
+  subtasks    Subtask[]
   comments    Comment[]
   activities  Activity[]
   timeEntries TimeEntry[]
   timers      Timer[]
   files       File[]
+  tags        Tag[]
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([creatorId])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  name        String
+  color       String    @default("#3b82f6")
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, name])
 }
 
 enum TaskStatus {
@@ -143,6 +203,9 @@ model Comment {
 
   task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id])
+
+  @@index([taskId])
+  @@index([authorId])
 }
 
 model Activity {
@@ -155,6 +218,9 @@ model Activity {
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
 }
 
 enum ActivityType {
@@ -172,10 +238,14 @@ model TimeEntry {
   endTime   DateTime
   duration  Int      @default(0) // Logic in seconds
   note      String?
+  isBillable Boolean  @default(true)
   createdAt DateTime @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
 }
 
 model Timer {
@@ -198,25 +268,127 @@ model File {
   size         Int
   projectId    String
   taskId       String?
+  folderId     String?
   uploadedById String
   createdAt    DateTime @default(now())
 
   project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task       Task?   @relation(fields: [taskId], references: [id])
+  folder     Folder? @relation(fields: [folderId], references: [id])
   uploadedBy User    @relation(fields: [uploadedById], references: [id])
+  versions   FileVersion[]
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([folderId])
+  @@index([uploadedById])
+}
+
+model FileVersion {
+  id           String   @id @default(cuid())
+  fileId       String
+  key          String   @unique
+  originalName String
+  mimeType     String
+  size         Int
+  versionNumber Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  file       File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([fileId])
+  @@index([uploadedById])
+}
+
+model Folder {
+  id        String   @id @default(cuid())
+  name      String
+  projectId String
+  parentId  String?
+  createdAt DateTime @default(now())
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   Folder?  @relation("FolderToFolder", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderToFolder")
+  files    File[]
+
+  @@index([projectId])
+  @@index([parentId])
 }
 
 model Message {
-  id         String   @id @default(cuid())
-  content    String
-  projectId  String? // Project channel
-  senderId   String
-  receiverId String? // DM
-  createdAt  DateTime @default(now())
+  id          String        @id @default(cuid())
+  content     String
+  workspaceId String?       // Workspace channel
+  projectId   String?       // Project channel
+  senderId    String
+  receiverId  String?       // DM (Legacy/Simple DM)
+  conversationId String?    // Group DM
+  parentId    String?
+  isPinned    Boolean       @default(false)
+  status      MessageStatus @default(SENT)
+  deliveredAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  project  Project? @relation(fields: [projectId], references: [id])
-  sender   User     @relation("SentMessages", fields: [senderId], references: [id])
-  receiver User?    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  project   Project?   @relation(fields: [projectId], references: [id])
+  sender    User       @relation("SentMessages", fields: [senderId], references: [id])
+  receiver  User?      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parent    Message?   @relation("Thread", fields: [parentId], references: [id])
+  replies   Message[]  @relation("Thread")
+  reactions Reaction[]
+  reads     MessageRead[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([conversationId])
+  @@index([parentId])
+}
+
+enum MessageStatus {
+  SENDING   // Optimistic UI, not yet confirmed by server
+  SENT      // Saved to database
+  DELIVERED // Received by recipient's client
+  READ      // Read by recipient
+  FAILED    // Failed to send
+}
+
+model MessageRead {
+  id             String   @id @default(cuid())
+  userId         String
+  messageId      String
+  workspaceId    String? // For tracking last read in a workspace channel
+  projectId      String? // For tracking last read in a project channel
+  receiverId     String? // For tracking last read in a DM
+  lastReadAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@unique([userId, projectId])
+  @@unique([userId, receiverId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
 }
 
 model Notification {
@@ -229,6 +401,8 @@ model Notification {
   createdAt DateTime         @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 enum NotificationType {
@@ -236,4 +410,35 @@ enum NotificationType {
   COMMENT_MENTION
   MESSAGE_RECEIVED
   PROJECT_INVITE
+}
+
+model Subtask {
+  id        String   @id @default(cuid())
+  title     String
+  completed Boolean  @default(false)
+  position  Float    @default(1000)
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  email       String
+  workspaceId String
+  inviterId   String
+  role        Role     @default(MEMBER)
+  token       String   @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter     User      @relation("SentInvitations", fields: [inviterId], references: [id])
+
+  @@unique([workspaceId, email])
+  @@index([token])
 }

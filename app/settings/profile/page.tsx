@@ -1,0 +1,14 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function SettingsProfileRedirect() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/update-password");
+  }, [router]);
+
+  return null;
+}

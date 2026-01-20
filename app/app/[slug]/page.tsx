@@ -11,7 +11,17 @@ import {
   ChevronRight,
   Calendar,
   LucideIcon,
+  Loader2,
+  ArrowRight,
+  AlertCircle,
+  Timer as TimerIcon,
+  StopCircle,
 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/cn";
 
 interface Stats {
   projects: number;
@@ -20,9 +30,40 @@ interface Stats {
   hours: number;
 }
 
-interface ActionItem {
-  label: string;
-  icon: LucideIcon;
+interface MiniTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate?: string;
+}
+
+interface ActivityItem {
+  id: string;
+  user: string;
+  action: string;
+  target: string;
+  project: string;
+  time: string;
+  color: string;
+}
+
+interface ActiveTimer {
+  id: string;
+  taskId: string;
+  startTime: string;
+  duration: number; // current duration in seconds
+  task: { title: string };
+}
+
+interface DashboardData {
+  stats: Stats;
+  todaysTasks: MiniTask[];
+  overdueTasks: MiniTask[];
+  upcomingTasks: MiniTask[];
+  activeTimer: ActiveTimer | null;
+  taskStatusStats: { TODO: number; IN_PROGRESS: number; DONE: number };
+  recentActivity: ActivityItem[];
 }
 
 export default function WorkspaceDashboard({
@@ -31,34 +72,20 @@ export default function WorkspaceDashboard({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const [stats, setStats] = useState<Stats>({
-    projects: 0,
-    tasks: 0,
-    members: 0,
-    hours: 0,
-  });
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timerDisplay, setTimerDisplay] = useState("00:00:00");
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const wsRes = await fetch("/api/workspaces");
-        const workspaces = await wsRes.json();
-        const ws = workspaces.find(
-          (w: { slug: string; projects?: unknown[]; members?: unknown[] }) =>
-            w.slug === slug,
-        );
-
-        if (ws) {
-          setStats({
-            projects: ws.projects?.length || 0,
-            tasks: 12, // Mock for now
-            members: ws.members?.length || 1,
-            hours: 45.5, // Mock for now
-          });
+        const res = await fetch(`/api/workspaces/${slug}/dashboard`);
+        if (res.ok) {
+          const result = await res.json();
+          setData(result);
         }
       } catch (e: unknown) {
-        console.error(e);
+        console.error("Dashboard fetch error:", e);
       } finally {
         setLoading(false);
       }
@@ -67,517 +94,539 @@ export default function WorkspaceDashboard({
     if (slug) fetchDashboardData();
   }, [slug]);
 
-  const statCards = [
-    {
-      label: "Active Projects",
-      value: stats.projects,
-      icon: Briefcase,
-      color: "#8b5cf6",
-      trend: "+2 this month",
-    },
-    {
-      label: "Open Tasks",
-      value: stats.tasks,
-      icon: CheckCircle2,
-      color: "#10b981",
-      trend: "5 urgent",
-    },
-    {
-      label: "Team Members",
-      value: stats.members,
-      icon: Users,
-      color: "#3b82f6",
-      trend: "3 active now",
-    },
-    {
-      label: "Hours Tracked",
-      value: stats.hours,
-      icon: Clock,
-      color: "#f59e0b",
-      trend: "12.5 hrs today",
-    },
-  ];
+  // Timer tick effect
+  useEffect(() => {
+    if (!data?.activeTimer) return;
+
+    const interval = setInterval(() => {
+      setData((prev) => {
+        if (!prev?.activeTimer) return prev;
+        return {
+          ...prev,
+          activeTimer: {
+            ...prev.activeTimer,
+            duration: prev.activeTimer.duration + 1,
+          },
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [data?.activeTimer]);
+
+  useEffect(() => {
+    if (data?.activeTimer) {
+      const d = data.activeTimer.duration;
+      const h = Math.floor(d / 3600);
+      const m = Math.floor((d % 3600) / 60);
+      const s = d % 60;
+      setTimerDisplay(
+        `${h.toString().padStart(2, "0")}:${m
+          .toString()
+          .padStart(2, "0")}:${s.toString().padStart(2, "0")}`,
+      );
+    }
+  }, [data?.activeTimer, data?.activeTimer?.duration]);
+
+  const handleStopTimer = async () => {
+    if (!data?.activeTimer) return;
+    try {
+      const res = await fetch("/api/time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: data.activeTimer.taskId,
+          action: "stop",
+        }),
+      });
+      if (res.ok) {
+        setData((prev) => (prev ? { ...prev, activeTimer: null } : null));
+      }
+    } catch (err) {
+      console.error("Failed to stop timer:", err);
+    }
+  };
+
+  const statCards = data
+    ? [
+        {
+          label: "Active Projects",
+          value: data.stats.projects,
+          icon: Briefcase,
+          color: "#8b5cf6",
+          trend: "Total current",
+          href: `/app/${slug}/projects`,
+        },
+        {
+          label: "Open Tasks",
+          value: data.stats.tasks,
+          icon: CheckCircle2,
+          color: "#10b981",
+          trend: "Across projects",
+          href: `/app/${slug}/tasks`,
+        },
+        {
+          label: "Team Members",
+          value: data.stats.members,
+          icon: Users,
+          color: "#3b82f6",
+          trend: "In workspace",
+          href: `/app/${slug}/settings/members`,
+        },
+        {
+          label: "Hours Tracked",
+          value: data.stats.hours,
+          icon: Clock,
+          color: "#f59e0b",
+          trend: "Last 30 days",
+          href: `/app/${slug}/timesheet`,
+        },
+      ]
+    : [];
 
   if (loading)
     return (
-      <div className="loading-state">
-        <div className="spinner gradient-bg" />
-        <p>Loading your workspace...</p>
-        <style jsx>{`
-          .loading-state {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-          }
-          .spinner {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-          }
-          @keyframes pulse {
-            0% {
-              transform: scale(0.8);
-              opacity: 0.5;
-            }
-            50% {
-              transform: scale(1.1);
-              opacity: 1;
-            }
-            100% {
-              transform: scale(0.8);
-              opacity: 0.5;
-            }
-          }
-        `}</style>
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30 text-mutedForeground text-center p-4">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+        <div className="space-y-1">
+          <p className="font-bold text-lg text-foreground">
+            Syncing your workspace...
+          </p>
+          <p className="text-sm opacity-70">
+            Fetching real-time data from database
+          </p>
+        </div>
       </div>
     );
 
+  if (!data) return null;
+
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <div className="header-info">
-          <h1 className="gradient-text">Workspace Overview</h1>
-          <p>
-            Welcome back! You have <span className="highlight">5 tasks</span>{" "}
-            due today.
+    <div className="p-8 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-border/50">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge
+              variant="secondary"
+              className="bg-primary/5 text-primary border-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            >
+              {slug}
+            </Badge>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground">
+            Workspace Overview
+          </h1>
+          <p className="text-mutedForeground text-lg">
+            Welcome back! You have{" "}
+            <span className="text-foreground font-bold">
+              {data.stats.tasks} tasks
+            </span>{" "}
+            currently in progress.
           </p>
         </div>
-        <div className="header-actions">
-          <button className="glass-btn glass">
-            <Calendar size={18} />
-            <span>Weekly Report</span>
-          </button>
-          <button className="primary-btn">
-            <Zap size={18} />
-            <span>Quick Start</span>
-          </button>
+        <div className="flex gap-3 w-full md:w-auto">
+          <Button
+            asChild
+            variant="secondary"
+            className="flex-1 md:flex-none gap-2 px-6 h-12 rounded-xl shadow-sm border-border/50 hover:bg-muted font-bold"
+          >
+            <Link href={`/app/${slug}/timesheet`}>
+              <Calendar size={18} />
+              <span>Weekly Report</span>
+            </Link>
+          </Button>
+          <Button
+            asChild
+            className="flex-1 md:flex-none gap-2 px-6 h-12 rounded-xl shadow-lg shadow-primary/20 font-bold"
+          >
+            <Link href={`/app/${slug}/projects/new`}>
+              <Zap size={18} />
+              <span>Quick Start</span>
+            </Link>
+          </Button>
         </div>
       </header>
 
-      <div className="stats-grid">
-        {statCards.map((stat, idx) => (
-          <div
-            key={stat.label}
-            className="stat-card glass glass-hover"
-            style={{ "--delay": `${idx * 0.1}s` } as React.CSSProperties}
-          >
-            <div className="stat-header">
-              <div
-                className="stat-icon"
-                style={{ background: `${stat.color}15`, color: stat.color }}
-              >
-                <stat.icon size={22} />
-              </div>
-              <span className="stat-trend">{stat.trend}</span>
+      {/* Timer Section IF Active */}
+      {data.activeTimer && (
+        <Card className="p-6 bg-primary/5 border-primary/20 flex flex-col md:flex-row items-center justify-between gap-6 shadow-glow-primary">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center animate-pulse shadow-soft">
+              <TimerIcon size={32} className="text-white" />
             </div>
-            <div className="stat-body">
-              <div className="stat-value">{stat.value}</div>
-              <div className="stat-label">{stat.label}</div>
-            </div>
-            <div className="stat-progress-bg">
-              <div
-                className="stat-progress-bar"
-                style={{ background: stat.color, width: "40%" }}
-              />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-primary uppercase tracking-[0.2em]">
+                Active Timer
+              </p>
+              <h3 className="text-xl font-black text-foreground">
+                {data.activeTimer.task.title}
+              </h3>
             </div>
           </div>
+          <div className="flex items-center gap-8">
+            <div className="text-5xl font-mono font-black tracking-tighter text-primary slashed-zero">
+              {timerDisplay}
+            </div>
+            <Button
+              onClick={handleStopTimer}
+              variant="destructive"
+              className="h-14 px-8 rounded-2xl font-black shadow-lg shadow-red-500/20 gap-2 text-base transition-all active:scale-95"
+            >
+              <StopCircle size={20} />
+              Stop Timer
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statCards.map((stat) => (
+          <Link key={stat.label} href={stat.href} className="block group">
+            <Card className="p-7 h-full transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 group-hover:border-primary/30 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-0 translate-x-4">
+                <ArrowRight className="text-primary" size={16} />
+              </div>
+
+              <div className="flex justify-between items-start mb-8">
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-sm"
+                  style={{
+                    background: `${stat.color}10`,
+                    color: stat.color,
+                  }}
+                >
+                  <stat.icon size={28} />
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-bold uppercase tracking-widest opacity-60 bg-muted/30 border-transparent group-hover:bg-primary/5 group-hover:text-primary transition-colors"
+                >
+                  {stat.trend}
+                </Badge>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-4xl font-black tracking-tight group-hover:text-primary transition-colors">
+                  {stat.value}
+                </div>
+                <div className="text-xs font-bold text-mutedForeground uppercase tracking-[0.15em] opacity-70 group-hover:opacity-100 transition-opacity">
+                  {stat.label}
+                </div>
+              </div>
+
+              <div className="mt-8 h-1 w-full bg-muted/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-out delay-300"
+                  style={{
+                    background: stat.color,
+                    width:
+                      data.stats.tasks > 0
+                        ? `${Math.min((stat.value / (data.stats.tasks || 1)) * 100, 100)}%`
+                        : "5%",
+                  }}
+                />
+              </div>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      <div className="dashboard-layout">
-        <div className="main-col">
-          <section className="activity-section glass">
-            <div className="section-header">
-              <div className="header-title">
-                <ActivityIcon size={20} className="header-icon" />
-                <h3>Recent Activity</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* Task Summary at a Glance */}
+        <div className="lg:col-span-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <DashboardTaskWidget
+              title="Today's Focus"
+              tasks={data.todaysTasks}
+              icon={Zap}
+              color="text-amber-500"
+            />
+            <DashboardTaskWidget
+              title="Overdue"
+              tasks={data.overdueTasks}
+              icon={AlertCircle}
+              color="text-red-500"
+              showDate
+            />
+            <DashboardTaskWidget
+              title="Upcoming Deadline"
+              tasks={data.upcomingTasks}
+              icon={Calendar}
+              color="text-blue-500"
+              showDate
+            />
+          </div>
+        </div>
+
+        {/* Activity Section */}
+        <div className="lg:col-span-8">
+          <Card className="flex flex-col h-full overflow-hidden border-border/40 shadow-sm">
+            <div className="p-8 pb-6 flex justify-between items-center bg-muted/5 border-b border-border/50">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 flex items-center justify-center bg-primary/10 rounded-xl">
+                  <ActivityIcon size={20} className="text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Recent Activity</h3>
+                  <p className="text-xs text-mutedForeground font-medium">
+                    Live updates from your team
+                  </p>
+                </div>
               </div>
-              <button className="text-btn">View All</button>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="text-primary font-bold hover:bg-primary/10 px-4 rounded-lg transition-all"
+              >
+                <Link href={`/app/${slug}/activity`}>View All</Link>
+              </Button>
             </div>
-            <div className="activity-list">
-              {[
-                {
-                  user: "You",
-                  action: "created task",
-                  target: "Setup R2 Bucket",
-                  project: "Dev Ops",
-                  time: "2h ago",
-                  color: "#8b5cf6",
-                },
-                {
-                  user: "Sarah",
-                  action: "commented on",
-                  target: "Fix Auth Bug",
-                  project: "Project Alpha",
-                  time: "4h ago",
-                  color: "#10b981",
-                },
-                {
-                  user: "John",
-                  action: "completed",
-                  target: "Update Logo",
-                  project: "Branding",
-                  time: "Yesterday",
-                  color: "#3b82f6",
-                },
-                {
-                  user: "System",
-                  action: "automated report",
-                  target: "Weekly Summary",
-                  project: "General",
-                  time: "1 day ago",
-                  color: "#94a3b8",
-                },
-              ].map((item, i) => (
-                <div key={i} className="activity-item">
-                  <div className="activity-line" />
-                  <div
-                    className="user-dot"
-                    style={{ background: item.color }}
-                  />
-                  <div className="activity-content">
-                    <p className="activity-text">
-                      <span className="user-name">{item.user}</span>{" "}
-                      {item.action}
-                      <span className="target-name">
-                        {" "}
-                        &quot;{item.target}&quot;
+
+            <div className="p-8 space-y-10 relative bg-card">
+              {data.recentActivity.length > 0 ? (
+                data.recentActivity.map((item, i) => (
+                  <div key={item.id} className="flex gap-6 relative group">
+                    {i !== data.recentActivity.length - 1 && (
+                      <div className="absolute left-[7px] top-6 h-[calc(100%+40px)] w-[2px] bg-muted/40" />
+                    )}
+                    <div className="relative z-10 mt-1">
+                      <div
+                        className="w-4 h-4 rounded-full border-4 border-background shadow-md transition-all duration-300 group-hover:scale-125 group-hover:shadow-primary/20"
+                        style={{ backgroundColor: item.color }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div className="text-[15px] leading-relaxed text-mutedForeground group-hover:text-foreground transition-colors">
+                        <span className="font-bold text-foreground">
+                          {item.user}
+                        </span>{" "}
+                        {item.action}
+                        <span className="text-foreground font-semibold italic mx-1.5">
+                          &quot;{item.target}&quot;
+                        </span>
+                        in
+                        <Badge
+                          variant="outline"
+                          className="ml-2 font-bold text-[9px] uppercase tracking-tighter px-2 py-0 transition-all border-current/20 group-hover:border-current"
+                          style={{
+                            color: item.color,
+                            backgroundColor: `${item.color}05`,
+                          }}
+                        >
+                          {item.project}
+                        </Badge>
+                      </div>
+                      <span className="text-[11px] font-bold text-mutedForeground/40 uppercase tracking-widest flex items-center gap-1.5 group-hover:text-mutedForeground transition-colors">
+                        <Clock size={10} />
+                        {item.time}
                       </span>
-                      in{" "}
-                      <span
-                        className="project-tag"
-                        style={{ color: item.color }}
-                      >
-                        {item.project}
-                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-20 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <ActivityIcon size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-foreground">
+                      No activity yet
+                    </h4>
+                    <p className="text-sm">
+                      Start working in projects to see updates here.
                     </p>
-                    <span className="activity-time">{item.time}</span>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
-          </section>
+          </Card>
         </div>
 
-        <div className="side-col">
-          <section className="quick-actions glass">
-            <div className="section-header">
-              <h3>Quick Actions</h3>
+        {/* Status Distribution */}
+        <div className="lg:col-span-4 space-y-8">
+          <Card className="p-8 border-border/40 shadow-sm bg-card">
+            <div className="mb-8">
+              <h3 className="text-xl font-bold">Task Status Distribution</h3>
+              <p className="text-xs text-mutedForeground mt-1 font-medium">
+                Overall workspace health
+              </p>
             </div>
-            <nav className="action-nav">
-              {(
-                [
-                  { label: "Create New Project", icon: Briefcase },
-                  { label: "Invite Team Members", icon: Users },
-                  { label: "Generate API Key", icon: Zap },
-                ] as ActionItem[]
-              ).map((action, i) => (
-                <button key={i} className="action-link glass-hover">
-                  <div className="action-icon glass">
-                    <action.icon size={18} />
-                  </div>
-                  <span>{action.label}</span>
-                  <ChevronRight size={16} className="chevron" />
-                </button>
-              ))}
-            </nav>
-          </section>
 
-          <section className="upgrade-card gradient-bg">
-            <h4>Go Premium</h4>
-            <p>Unlock unlimited projects and advanced analytics.</p>
-            <button className="white-btn">Upgrade Now</button>
-          </section>
+            <div className="space-y-6">
+              <StatusProgressBar
+                label="To Do"
+                value={data.taskStatusStats.TODO}
+                total={data.stats.tasks}
+                color="bg-slate-400"
+              />
+              <StatusProgressBar
+                label="In Progress"
+                value={data.taskStatusStats.IN_PROGRESS}
+                total={data.stats.tasks}
+                color="bg-primary"
+              />
+              <StatusProgressBar
+                label="Done"
+                value={data.taskStatusStats.DONE}
+                total={data.stats.tasks}
+                color="bg-emerald-500"
+              />
+            </div>
+          </Card>
+
+          <div className="p-10 rounded-[2.5rem] bg-gradient-to-br from-[#2563eb] via-[#3b82f6] to-[#6366f1] text-primary-foreground shadow-2xl shadow-blue-500/30 relative overflow-hidden group border border-white/10">
+            {/* Decorative background circle */}
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl transition-all duration-1000 group-hover:scale-150 group-hover:bg-white/20" />
+            <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-sky-400/20 rounded-full blur-2xl transition-all duration-1000 group-hover:scale-125" />
+
+            <div className="relative z-10 space-y-6">
+              <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shadow-inner">
+                <Zap size={28} className="fill-white" />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-2xl font-black tracking-tight">
+                  Go Premium
+                </h4>
+                <p className="text-sm font-medium opacity-80 leading-relaxed">
+                  Unlock unlimited projects, team-wide analytics, and priority
+                  24/7 support.
+                </p>
+              </div>
+
+              <Button
+                asChild
+                className="w-full bg-white text-blue-600 hover:bg-slate-50 font-black border-none shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all h-14 rounded-2xl text-base"
+              >
+                <Link href={`/app/${slug}/billing`}>Upgrade Now</Link>
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <style jsx>{`
-        .dashboard-container {
-          padding: 3rem;
-          max-width: 1400px;
-          margin: 0 auto;
-          animation: fadeIn 0.8s ease-out;
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .dashboard-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          margin-bottom: 3rem;
-        }
-        .header-info h1 {
-          font-size: 2.75rem;
-          margin-bottom: 0.5rem;
-          letter-spacing: -0.04em;
-        }
-        .header-info p {
-          color: var(--muted-foreground);
-          font-size: 1.125rem;
-        }
-        .highlight {
-          color: var(--foreground);
-          font-weight: 600;
-        }
-        .header-actions {
-          display: flex;
-          gap: 1rem;
-        }
-        .glass-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem 1.25rem;
-          border-radius: 0.75rem;
-          color: white;
-          font-weight: 500;
-        }
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 3rem;
-        }
-        .stat-card {
-          padding: 1.75rem;
-          border-radius: 1.25rem;
-          position: relative;
-          overflow: hidden;
-          animation: slideUp 0.6s ease-out backwards;
-          animation-delay: var(--delay);
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .stat-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 1.5rem;
-        }
-        .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .stat-trend {
-          font-size: 0.7rem;
-          font-weight: 600;
-          color: var(--muted-foreground);
-          padding: 0.25rem 0.6rem;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 100px;
-        }
-        .stat-value {
-          font-size: 2.25rem;
-          font-weight: 800;
-          margin-bottom: 0.25rem;
-          letter-spacing: -0.02em;
-        }
-        .stat-label {
-          font-size: 0.875rem;
-          color: var(--muted-foreground);
-          font-weight: 500;
-        }
-        .stat-progress-bg {
-          height: 4px;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 2px;
-          margin-top: 1.5rem;
-        }
-        .stat-progress-bar {
-          height: 100%;
-          border-radius: 2px;
-        }
-        .dashboard-layout {
-          display: grid;
-          grid-template-columns: 1fr 340px;
-          gap: 2rem;
-        }
-        .activity-section,
-        .quick-actions {
-          padding: 2rem;
-          border-radius: 1.5rem;
-        }
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 2rem;
-        }
-        .header-title {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        .header-icon {
-          color: var(--primary);
-        }
-        .section-header h3 {
-          font-size: 1.125rem;
-          font-weight: 700;
-        }
-        .text-btn {
-          color: var(--primary);
-          font-size: 0.875rem;
-          font-weight: 600;
-        }
-        .activity-list {
-          display: flex;
-          flex-direction: column;
-        }
-        .activity-item {
-          display: flex;
-          gap: 1.5rem;
-          padding-bottom: 2rem;
-          position: relative;
-        }
-        .activity-line {
-          position: absolute;
-          left: 5px;
-          top: 10px;
-          bottom: 0;
-          width: 1px;
-          background: var(--border);
-        }
-        .activity-item:last-child .activity-line {
-          display: none;
-        }
-        .user-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          border: 3px solid #1e293b;
-          position: relative;
-          z-index: 1;
-          margin-top: 4px;
-        }
-        .user-name {
-          font-weight: 700;
-          color: var(--foreground);
-        }
-        .target-name {
-          color: var(--foreground);
-          font-weight: 500;
-        }
-        .project-tag {
-          font-size: 0.75rem;
-          font-weight: 700;
-          padding: 0.1rem 0.5rem;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid currentColor;
-          border-radius: 4px;
-          margin-left: 0.25rem;
-        }
-        .activity-time {
-          font-size: 0.75rem;
-          color: var(--muted-foreground);
-          margin-top: 0.25rem;
-          display: block;
-        }
-        .action-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-        .action-link {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1rem;
-          border-radius: 1rem;
-          text-align: left;
-        }
-        .action-icon {
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--muted-foreground);
-        }
-        .action-link:hover .action-icon {
-          color: var(--primary);
-          background: rgba(139, 92, 246, 0.1);
-        }
-        .action-link span {
-          flex: 1;
-          font-weight: 500;
-          font-size: 0.9375rem;
-        }
-        .chevron {
-          color: var(--muted-foreground);
-          transition: transform 0.2s;
-        }
-        .action-link:hover .chevron {
-          transform: translateX(3px);
-          color: white;
-        }
-        .upgrade-card {
-          margin-top: 2rem;
-          padding: 2rem;
-          border-radius: 1.5rem;
-          color: white;
-          position: relative;
-          overflow: hidden;
-        }
-        .upgrade-card h4 {
-          font-size: 1.25rem;
-          font-weight: 800;
-          margin-bottom: 0.5rem;
-        }
-        .upgrade-card p {
-          font-size: 0.875rem;
-          opacity: 0.9;
-          margin-bottom: 1.5rem;
-          line-height: 1.5;
-        }
-        .white-btn {
-          background: white;
-          color: var(--primary);
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.75rem;
-          font-weight: 700;
-          width: 100%;
-        }
-        @media (max-width: 1024px) {
-          .dashboard-layout {
-            grid-template-columns: 1fr;
-          }
-          .side-col {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            align-items: start;
-          }
-          .upgrade-card {
-            margin-top: 0;
-          }
-        }
-      `}</style>
+function DashboardTaskWidget({
+  title,
+  tasks,
+  icon: Icon,
+  color,
+  showDate = false,
+}: {
+  title: string;
+  tasks: MiniTask[];
+  icon: LucideIcon;
+  color: string;
+  showDate?: boolean;
+}) {
+  return (
+    <Card className="flex flex-col overflow-hidden transition-all hover:shadow-lg border-border/40 group">
+      <div className="p-5 border-b border-border/30 bg-muted/5 flex items-center gap-3">
+        <div className={cn("p-2 rounded-lg bg-current/10 shrink-0", color)}>
+          <Icon size={18} />
+        </div>
+        <h4 className="font-bold text-sm tracking-tight">{title}</h4>
+        <Badge
+          variant="secondary"
+          className="ml-auto text-[10px] h-5 min-w-5 flex items-center justify-center rounded-full bg-muted/50"
+        >
+          {tasks.length}
+        </Badge>
+      </div>
+      <div className="p-2 space-y-1">
+        {tasks.length > 0 ? (
+          tasks.map((task) => (
+            <div
+              key={task.id}
+              className="p-3 rounded-lg hover:bg-muted/50 transition-colors flex items-center justify-between group/item"
+            >
+              <div className="space-y-0.5">
+                <p className="text-sm font-semibold text-foreground line-clamp-1 group-hover/item:text-primary transition-colors">
+                  {task.title}
+                </p>
+                {showDate && task.dueDate && (
+                  <p className="text-[10px] font-bold text-mutedForeground uppercase flex items-center gap-1">
+                    <Calendar size={10} />
+                    {new Date(task.dueDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[8px] font-black uppercase px-1.5 py-0 border-current/20",
+                  task.priority === "URGENT"
+                    ? "text-red-500 bg-red-500/5"
+                    : task.priority === "HIGH"
+                      ? "text-amber-500 bg-amber-500/5"
+                      : "text-blue-500 bg-blue-500/5",
+                )}
+              >
+                {task.priority}
+              </Badge>
+            </div>
+          ))
+        ) : (
+          <div className="py-8 text-center px-4">
+            <p className="text-xs font-medium text-mutedForeground/60">
+              No tasks found
+            </p>
+          </div>
+        )}
+      </div>
+      {tasks.length > 0 && (
+        <div className="p-3 border-t border-border/30 bg-muted/5 flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-[10px] font-bold h-7 gap-1 hover:text-primary"
+          >
+            View All <ChevronRight size={10} />
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function StatusProgressBar({
+  label,
+  value,
+  total,
+  color,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+}) {
+  const percentage = total > 0 ? (value / total) * 100 : 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-end">
+        <span className="text-xs font-bold text-foreground uppercase tracking-widest opacity-80">
+          {label}
+        </span>
+        <span className="text-xs font-black text-mutedForeground">
+          <span className="text-foreground">{value}</span>
+          <span className="mx-1 opacity-30">/</span>
+          {total}
+        </span>
+      </div>
+      <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+        <div
+          className={cn(
+            "h-full rounded-full transition-all duration-1000 ease-out",
+            color,
+          )}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
     </div>
   );
 }

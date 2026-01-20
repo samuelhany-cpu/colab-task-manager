@@ -32,7 +32,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.local
 !.env.example
+
+# linting
+lint_report*.txt
+lint_results.json
 
 # vercel
 .vercel
@@ -40,3 +45,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+#error pics
+error_*.png

@@ -1,102 +1,182 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import KanbanBoard from "@/components/board/kanban-board";
 import ProjectMembers from "@/components/project/project-members";
-import { Users, LayoutGrid } from "lucide-react";
+import ProjectCalendar from "@/components/calendar/project-calendar";
+import {
+  Users,
+  LayoutGrid,
+  ArrowLeft,
+  Loader2,
+  Settings,
+  Star,
+  Calendar,
+} from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
+interface Project {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 export default function ProjectPage({
   params,
 }: {
-  params: Promise<{ projectId: string }>;
+  params: Promise<{ slug: string; projectId: string }>;
 }) {
-  const { projectId } = use(params);
-  const [activeTab, setActiveTab] = useState<"board" | "members">("board");
+  const { slug, projectId } = use(params);
+  const [activeTab, setActiveTab] = useState<"board" | "members" | "calendar">(
+    "board",
+  );
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        const res = await fetch(`/api/projects?workspaceSlug=${slug}`);
+        if (res.ok) {
+          const projects = await res.json();
+          const p = projects.find((p: Project) => p.id === projectId);
+          setProject(p);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (projectId) fetchProject();
+  }, [projectId, slug]);
+
+  if (loading)
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-muted/30">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="font-medium text-mutedForeground">Opening project...</p>
+      </div>
+    );
 
   return (
-    <div className="page-container">
-      {/* Tab Navigation */}
-      <div className="tab-navigation">
-        <button
-          onClick={() => setActiveTab("board")}
-          className={`tab-button ${activeTab === "board" ? "active" : ""}`}
-        >
-          <LayoutGrid size={16} />
-          Board
-        </button>
-        <button
-          onClick={() => setActiveTab("members")}
-          className={`tab-button ${activeTab === "members" ? "active" : ""}`}
-        >
-          <Users size={16} />
-          Members
-        </button>
-      </div>
+    <div className="h-screen flex flex-col bg-muted/30 overflow-hidden">
+      <header className="bg-card border-b border-border/50 px-8 pt-8 shrink-0">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex justify-between items-start">
+            <div className="space-y-4">
+              <Link
+                href={`/app/${slug}`}
+                className="inline-flex items-center gap-2 text-[10px] font-black text-mutedForeground hover:text-primary transition-colors group uppercase tracking-widest"
+              >
+                <ArrowLeft
+                  size={12}
+                  className="group-hover:-translate-x-1 transition-transform"
+                />
+                Back to Workspace
+              </Link>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                  <LayoutGrid size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-3xl font-black tracking-tight text-foreground">
+                      {project?.name || "Project Details"}
+                    </h1>
+                    <button className="text-mutedForeground/40 hover:text-amber-400 transition-colors">
+                      <Star size={20} />
+                    </button>
+                  </div>
+                  <p className="text-sm font-medium text-mutedForeground">
+                    Workspace:{" "}
+                    <span className="text-foreground font-bold">{slug}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
 
-      {/* Content */}
-      <div className="tab-content">
-        {activeTab === "board" ? (
-          <KanbanBoard projectId={projectId} />
-        ) : (
-          <ProjectMembers projectId={projectId} />
-        )}
-      </div>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="icon"
+                className="rounded-xl h-11 w-11 shadow-sm border-border/50"
+              >
+                <Settings size={20} />
+              </Button>
+              <Button className="rounded-xl h-11 px-6 font-bold shadow-lg shadow-primary/20">
+                Share Project
+              </Button>
+            </div>
+          </div>
 
-      <style jsx>{`
-        .page-container {
-          height: 100vh;
-          display: flex;
-          flex-direction: column;
-          background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        }
-        .tab-navigation {
-          display: flex;
-          gap: 0.5rem;
-          padding: 1.5rem 2rem 0;
-          background: rgba(15, 23, 42, 0.8);
-          backdrop-filter: blur(10px);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .tab-button {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.5rem;
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: rgba(255, 255, 255, 0.6);
-          background: transparent;
-          border: none;
-          border-bottom: 2px solid transparent;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          position: relative;
-        }
-        .tab-button:hover {
-          color: rgba(255, 255, 255, 0.9);
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 0.5rem 0.5rem 0 0;
-        }
-        .tab-button.active {
-          color: #60a5fa;
-          border-bottom-color: #60a5fa;
-        }
-        .tab-button.active::after {
-          content: "";
-          position: absolute;
-          bottom: -1px;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, #3b82f6, #60a5fa);
-          box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
-        }
-        .tab-content {
-          flex: 1;
-          overflow: hidden;
-          position: relative;
-        }
-      `}</style>
+          <div className="flex gap-8">
+            <button
+              onClick={() => setActiveTab("board")}
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "board"
+                  ? "text-primary"
+                  : "text-mutedForeground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <LayoutGrid size={14} />
+                Board
+              </div>
+              {activeTab === "board" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("members")}
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "members"
+                  ? "text-primary"
+                  : "text-mutedForeground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Users size={14} />
+                Team Members
+              </div>
+              {activeTab === "members" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("calendar")}
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "calendar"
+                  ? "text-primary"
+                  : "text-mutedForeground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Calendar size={14} />
+                Calendar
+              </div>
+              {activeTab === "calendar" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-hidden relative">
+        <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
+          <div className="max-w-7xl mx-auto h-full">
+            {activeTab === "board" ? (
+              <KanbanBoard projectId={projectId} workspaceSlug={slug} />
+            ) : activeTab === "calendar" ? (
+              <ProjectCalendar projectId={projectId} workspaceSlug={slug} />
+            ) : (
+              <ProjectMembers projectId={projectId} />
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

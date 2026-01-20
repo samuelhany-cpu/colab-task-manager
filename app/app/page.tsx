@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Layout, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Layout, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 interface Workspace {
   id: string;
@@ -11,25 +15,41 @@ interface Workspace {
 }
 
 export default function WorkspaceSelector() {
+  const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newWorkspace, setNewWorkspace] = useState({ name: "", slug: "" });
   const [creating, setCreating] = useState(false);
+  const [takingLong, setTakingLong] = useState(false);
 
   useEffect(() => {
     fetchWorkspaces();
+
+    const timer = setTimeout(() => {
+      if (loading) {
+        setTakingLong(true);
+      }
+    }, 8000); // 8 seconds timeout for "taking long" message
+
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchWorkspaces = async () => {
+    setError(null);
     try {
       const res = await fetch("/api/workspaces");
       if (res.ok) {
         const data = await res.json();
         setWorkspaces(data);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to load workspaces");
       }
     } catch (error) {
       console.error("Failed to fetch workspaces", error);
+      setError("Unable to connect to service. Please check your network.");
     } finally {
       setLoading(false);
     }
@@ -49,6 +69,11 @@ export default function WorkspaceSelector() {
         setWorkspaces([data, ...workspaces]);
         setShowCreate(false);
         setNewWorkspace({ name: "", slug: "" });
+        // Redirect to new workspace immediately for better UX
+        router.push(`/app/${data.slug}`);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to create workspace");
       }
     } catch (error) {
       console.error("Failed to create workspace", error);
@@ -57,420 +82,182 @@ export default function WorkspaceSelector() {
     }
   };
 
-  if (loading) {
+  if (loading || error) {
     return (
-      <div className="center-container">
-        <Loader2 className="animate-spin primary-color" size={48} />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-6 p-6 text-center">
+        {loading ? (
+          <>
+            <div className="relative">
+              <Loader2 className="animate-spin text-primary" size={48} />
+              <div className="absolute inset-0 bg-primary/5 rounded-full blur-xl animate-pulse" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xl font-black tracking-tight">
+                Initializing Environment
+              </p>
+              <p className="text-mutedForeground font-medium max-w-xs mx-auto">
+                {takingLong
+                  ? "This is taking longer than usual... We're checking the status of your workspaces."
+                  : "Fetching your high-intensity workspaces..."}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center text-destructive mb-2">
+              <AlertCircle size={32} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xl font-black tracking-tight">System Notice</p>
+              <p className="text-mutedForeground font-medium max-w-xs mx-auto">
+                {error}
+              </p>
+            </div>
+            <Button
+              onClick={fetchWorkspaces}
+              variant="secondary"
+              className="mt-4 rounded-xl font-bold h-12 px-8 border-border/50 hover:bg-muted"
+            >
+              Try Again
+            </Button>
+          </>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="selector-container">
-      <div className="content-box">
-        <div className="header">
-          <h1 className="gradient-text">Choose a Workspace</h1>
-          <p>
-            Select an existing workspace or create a new one to get started.
+    <div className="min-h-screen bg-muted/30 relative flex flex-col items-center py-20 px-4">
+      <div className="w-full max-w-5xl space-y-12">
+        {/* Header */}
+        <div className="text-center space-y-4">
+          <h1 className="text-5xl font-extrabold tracking-tight text-foreground">
+            Welcome Back
+          </h1>
+          <p className="text-mutedForeground text-xl max-w-2xl mx-auto">
+            Select a workspace to start collaborating or create a brand new one
+            for your team.
           </p>
         </div>
 
-        <div className="workspace-grid">
+        {/* Workspace Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
           {workspaces.map((ws) => (
-            <Link
-              key={ws.id}
-              href={`/app/${ws.slug}`}
-              className="workspace-card glass"
-            >
-              <div className="icon">
-                <Layout size={24} />
-              </div>
-              <div className="info">
-                <h3>{ws.name}</h3>
-                <p>/{ws.slug}</p>
-              </div>
-              <ArrowRight className="arrow" size={20} />
+            <Link key={ws.id} href={`/app/${ws.slug}`} className="group block">
+              <Card className="p-6 h-full transition-all hover:shadow-xl hover:-translate-y-1 hover:border-primary/40 border border-border/50 bg-card overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ArrowRight className="text-primary" size={20} />
+                </div>
+
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 flex items-center justify-center bg-primary/10 rounded-2xl group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                    <Layout
+                      size={28}
+                      className="text-primary group-hover:text-white transition-colors"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xl font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                      {ws.name}
+                    </h3>
+                    <p className="text-mutedForeground text-xs font-mono truncate uppercase tracking-widest opacity-70">
+                      /{ws.slug}
+                    </p>
+                  </div>
+                </div>
+              </Card>
             </Link>
           ))}
 
+          {/* Create Workspace CTA */}
           <button
-            className="create-card glass"
             onClick={() => setShowCreate(true)}
+            className="group relative p-6 h-full min-h-[140px] flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-mutedForeground/20 hover:border-primary/50 hover:bg-primary/5 transition-all duration-300"
           >
-            <Plus size={24} />
-            <span>Create Workspace</span>
+            <div className="w-12 h-12 flex items-center justify-center rounded-full bg-muted group-hover:bg-primary group-hover:text-white transition-all duration-300">
+              <Plus
+                size={24}
+                className="text-mutedForeground group-hover:text-white group-hover:rotate-90 transition-all duration-300"
+              />
+            </div>
+            <span className="text-mutedForeground group-hover:text-primary font-bold text-sm tracking-wide transition-colors">
+              CREATE WORKSPACE
+            </span>
           </button>
         </div>
-
-        {showCreate && (
-          <div className="modal-overlay">
-            <div className="modal glass">
-              <h2>New Workspace</h2>
-              <form onSubmit={handleCreate}>
-                <div className="form-group">
-                  <label>Name</label>
-                  <input
-                    required
-                    value={newWorkspace.name}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      setNewWorkspace({
-                        name,
-                        slug: name
-                          .toLowerCase()
-                          .replace(/ /g, "-")
-                          .replace(/[^\w-]/g, ""),
-                      });
-                    }}
-                    placeholder="Engineering Team"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Slug</label>
-                  <input
-                    required
-                    value={newWorkspace.slug}
-                    onChange={(e) =>
-                      setNewWorkspace({ ...newWorkspace, slug: e.target.value })
-                    }
-                    placeholder="engineering-team"
-                  />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" onClick={() => setShowCreate(false)}>
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="primary-btn"
-                    disabled={creating}
-                  >
-                    {creating ? "Creating..." : "Create"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
 
-      <style jsx>{`
-        .selector-container {
-          min-height: 100vh;
-          padding: 4rem 2rem;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          background: radial-gradient(
-            circle at top left,
-            #1e1b4b 0%,
-            #0f172a 100%
-          );
-          position: relative;
-          overflow: hidden;
-        }
-        .selector-container::before {
-          content: "";
-          position: absolute;
-          top: -50%;
-          right: -50%;
-          width: 100%;
-          height: 100%;
-          background: radial-gradient(
-            circle,
-            rgba(139, 92, 246, 0.1) 0%,
-            transparent 70%
-          );
-          animation: float 20s ease-in-out infinite;
-        }
-        @keyframes float {
-          0%,
-          100% {
-            transform: translate(0, 0);
-          }
-          50% {
-            transform: translate(-20px, -20px);
-          }
-        }
-        .content-box {
-          width: 100%;
-          max-width: 900px;
-          position: relative;
-          z-index: 1;
-        }
-        .header {
-          text-align: center;
-          margin-bottom: 4rem;
-          animation: fadeInDown 0.6s ease-out;
-        }
-        @keyframes fadeInDown {
-          from {
-            opacity: 0;
-            transform: translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        h1 {
-          font-size: 3.5rem;
-          font-weight: 800;
-          margin-bottom: 1rem;
-          letter-spacing: -0.02em;
-        }
-        p {
-          color: var(--muted-foreground);
-          font-size: 1.25rem;
-          max-width: 600px;
-          margin: 0 auto;
-        }
-        .workspace-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 1.5rem;
-          animation: fadeInUp 0.6s ease-out 0.2s both;
-        }
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .workspace-card,
-        .create-card {
-          padding: 1.75rem;
-          display: flex;
-          align-items: center;
-          gap: 1.25rem;
-          border-radius: var(--radius);
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          cursor: pointer;
-          position: relative;
-          overflow: hidden;
-        }
-        .workspace-card::before,
-        .create-card::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(
-            135deg,
-            rgba(139, 92, 246, 0.1),
-            rgba(217, 70, 239, 0.1)
-          );
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-        .workspace-card:hover::before {
-          opacity: 1;
-        }
-        .workspace-card:hover,
-        .create-card:hover {
-          transform: translateY(-6px);
-          background: rgba(30, 41, 59, 0.95);
-          box-shadow: 0 20px 40px -10px rgba(139, 92, 246, 0.3);
-        }
-        .icon {
-          width: 56px;
-          height: 56px;
-          background: linear-gradient(135deg, var(--primary), #d946ef);
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          box-shadow: 0 8px 16px -4px rgba(139, 92, 246, 0.4);
-          flex-shrink: 0;
-        }
-        .info {
-          flex: 1;
-          min-width: 0;
-        }
-        .info h3 {
-          font-size: 1.25rem;
-          margin-bottom: 0.25rem;
-          font-weight: 700;
-        }
-        .info p {
-          font-size: 0.875rem;
-          margin: 0;
-          opacity: 0.7;
-        }
-        .arrow {
-          margin-left: auto;
-          color: var(--primary);
-          opacity: 0;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          flex-shrink: 0;
-        }
-        .workspace-card:hover .arrow {
-          opacity: 1;
-          transform: translateX(6px);
-        }
-        .create-card {
-          border: 2px dashed rgba(139, 92, 246, 0.3);
-          justify-content: center;
-          flex-direction: column;
-          color: var(--muted-foreground);
-          font-weight: 600;
-          background: transparent;
-          min-height: 140px;
-        }
-        .create-card:hover {
-          border-color: var(--primary);
-          color: var(--foreground);
-          border-style: solid;
-        }
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          z-index: 50;
-          animation: fadeIn 0.2s ease;
-        }
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        .modal {
-          width: 100%;
-          max-width: 480px;
-          padding: 2.5rem;
-          border-radius: var(--radius);
-          animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        @keyframes scaleIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        .modal h2 {
-          margin-bottom: 2rem;
-          font-size: 1.75rem;
-          font-weight: 700;
-        }
-        form {
-          display: flex;
-          flex-direction: column;
-          gap: 1.5rem;
-        }
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 0.625rem;
-        }
-        label {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: var(--foreground);
-        }
-        input {
-          padding: 0.875rem 1.25rem;
-          background: rgba(15, 23, 42, 0.6);
-          border: 1px solid var(--border);
-          border-radius: 0.625rem;
-          color: white;
-          font-size: 1rem;
-          transition: all 0.2s ease;
-        }
-        input:focus {
-          outline: none;
-          border-color: var(--primary);
-          background: rgba(15, 23, 42, 0.8);
-          box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-        }
-        input::placeholder {
-          color: var(--muted-foreground);
-          opacity: 0.5;
-        }
-        .modal-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 0.75rem;
-          margin-top: 1.5rem;
-        }
-        .modal-actions button {
-          padding: 0.75rem 1.5rem;
-          border-radius: 0.625rem;
-          font-weight: 600;
-          font-size: 0.9375rem;
-          transition: all 0.2s ease;
-        }
-        .modal-actions button[type="button"] {
-          background: rgba(30, 41, 59, 0.5);
-          color: var(--foreground);
-          border: 1px solid var(--border);
-        }
-        .modal-actions button[type="button"]:hover {
-          background: rgba(30, 41, 59, 0.8);
-          border-color: rgba(255, 255, 255, 0.15);
-        }
-        .primary-btn {
-          padding: 0.75rem 1.5rem;
-          background: linear-gradient(135deg, var(--primary), #d946ef);
-          color: white;
-          border-radius: 0.625rem;
-          font-weight: 600;
-          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
-        }
-        .primary-btn:hover:not(:disabled) {
-          box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
-          transform: translateY(-2px);
-        }
-        .primary-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .center-container {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-          color: var(--primary);
-        }
-        @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        @media (max-width: 768px) {
-          h1 {
-            font-size: 2.5rem;
-          }
-          .workspace-grid {
-            grid-template-columns: 1fr;
-          }
-          .modal {
-            padding: 2rem;
-          }
-        }
-      `}</style>
+      {/* Create Modal */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+          <Card className="w-full max-w-md p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-300 border-border/50">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">
+                New Workspace
+              </h2>
+              <p className="text-mutedForeground text-sm">
+                Set up a name and slug for your team.
+              </p>
+            </div>
+
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-mutedForeground/80 ml-1">
+                  Workspace Name
+                </label>
+                <Input
+                  required
+                  value={newWorkspace.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setNewWorkspace({
+                      name,
+                      slug: name
+                        .toLowerCase()
+                        .replace(/ /g, "-")
+                        .replace(/[^\w-]/g, ""),
+                    });
+                  }}
+                  placeholder="e.g. Acme Studio"
+                  className="rounded-xl h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-mutedForeground/80 ml-1">
+                  Workspace Slug
+                </label>
+                <Input
+                  required
+                  value={newWorkspace.slug}
+                  onChange={(e) =>
+                    setNewWorkspace({ ...newWorkspace, slug: e.target.value })
+                  }
+                  placeholder="e.g. acme-studio"
+                  className="rounded-xl h-11 font-mono text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowCreate(false)}
+                  className="rounded-xl font-semibold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={creating}
+                  className="rounded-xl font-bold min-w-[100px] shadow-lg shadow-primary/20"
+                >
+                  {creating ? "Creating..." : "Create"}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
