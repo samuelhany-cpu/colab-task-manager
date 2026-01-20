@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const subtaskSchema = z.object({
   title: z.string().min(1),
@@ -13,6 +18,11 @@ export async function GET(
   { params }: { params: Promise<{ taskId: string }> },
 ) {
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { taskId } = await params;
     const supabase = await createClient();
     const {
@@ -30,8 +40,7 @@ export async function GET(
 
     return NextResponse.json(subtasks);
   } catch (error) {
-    console.error("[SUBTASKS_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -40,6 +49,11 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> },
 ) {
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { taskId } = await params;
     const supabase = await createClient();
     const {
@@ -63,10 +77,6 @@ export async function POST(
 
     return NextResponse.json(subtask);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 400 });
-    }
-    console.error("[SUBTASKS_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }

@@ -2,15 +2,26 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma, NotificationType } from "@prisma/client";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 // GET /api/notifications - Fetch user notifications
 export async function GET(req: Request) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get("filter"); // 'all', 'unread', or specific type
     const limit = parseInt(searchParams.get("limit") || "50");
@@ -35,22 +46,24 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (error) {
-    console.error("Error fetching notifications:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch notifications" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }
 
 // POST /api/notifications - Create notification (internal/testing)
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { type, content, link, userId } = body;
 
@@ -72,10 +85,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(notification, { status: 201 });
   } catch (error) {
-    console.error("Error creating notification:", error);
-    return NextResponse.json(
-      { error: "Failed to create notification" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

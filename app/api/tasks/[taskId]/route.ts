@@ -4,6 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { notifyTaskAssigned } from "@/lib/notifications";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
@@ -19,15 +24,20 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ taskId: string }> },
 ) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { taskId } = await params;
-  const id = taskId; // Keep id variable if used below, or just replace all instances of id with taskId
-  const userId = user.id;
-
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { taskId } = await params;
+    const id = taskId;
+    const userId = user.id;
+
     const body = await req.json();
     const data = updateTaskSchema.parse(body);
 
@@ -135,14 +145,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedTask);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    console.error("Error updating task:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }
 
@@ -150,15 +153,20 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ taskId: string }> },
 ) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { taskId } = await params;
-  const id = taskId;
-  const userId = user.id;
-
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { taskId } = await params;
+    const id = taskId;
+    const userId = user.id;
+
     const task = await prisma.task.findUnique({
       where: { id },
     });
@@ -193,10 +201,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting task:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

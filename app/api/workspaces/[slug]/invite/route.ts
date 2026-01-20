@@ -4,6 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import crypto from "crypto";
 import { sendEmail, getInvitationHtml } from "@/lib/mail";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -16,6 +21,11 @@ export async function POST(
 ) {
   console.log("[INVITE_API] POST request received.");
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const user = await getCurrentUser();
     console.log("[INVITE_API] User:", user?.email || "No user");
     if (!user) {
@@ -42,7 +52,6 @@ export async function POST(
       );
     }
 
-    // Check if user is already a member
     const existingMember = workspace.members.find(
       (m) => m.user.email?.toLowerCase() === email.toLowerCase(),
     );
@@ -53,9 +62,8 @@ export async function POST(
       );
     }
 
-    // Create or update invitation
     const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const invitation = await prisma.invitation.upsert({
       where: {
@@ -81,7 +89,6 @@ export async function POST(
       },
     });
 
-    // Send invitation email
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
     const inviteLink = `${appUrl}/invite/${token}`;
 
@@ -97,13 +104,6 @@ export async function POST(
       invitationId: invitation.id,
     });
   } catch (error) {
-    console.error("[WORKSPACE_INVITE_POST]", error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

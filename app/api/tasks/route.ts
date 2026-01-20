@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { notifyTaskAssigned } from "@/lib/notifications";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -16,61 +21,76 @@ const taskSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
-  const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get("projectId");
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!projectId) {
-    return NextResponse.json(
-      { error: "Project ID is required" },
-      { status: 400 },
-    );
-  }
+    const { searchParams } = new URL(req.url);
+    const projectId = searchParams.get("projectId");
 
-  // Check project membership
-  const membership = await prisma.projectMember.findFirst({
-    where: {
-      projectId,
-      userId: user.id,
-    },
-  });
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project ID is required" },
+        { status: 400 },
+      );
+    }
 
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const tasks = await prisma.task.findMany({
-    where: { projectId },
-    include: {
-      assignee: {
-        select: { id: true, name: true, email: true, image: true },
+    // Check project membership
+    const membership = await prisma.projectMember.findFirst({
+      where: {
+        projectId,
+        userId: user.id,
       },
-      tags: {
-        select: { id: true, name: true, color: true },
-      },
-      subtasks: true,
-      _count: {
-        select: {
-          comments: true,
-          subtasks: true,
+    });
+
+    if (!membership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { projectId },
+      include: {
+        assignee: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+        tags: {
+          select: { id: true, name: true, color: true },
+        },
+        subtasks: true,
+        _count: {
+          select: {
+            comments: true,
+            subtasks: true,
+          },
         },
       },
-    },
-    orderBy: { position: "asc" },
-  });
+      orderBy: { position: "asc" },
+    });
 
-  return NextResponse.json(tasks);
+    return NextResponse.json(tasks);
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const body = await req.json();
     const { tagIds, ...data } = taskSchema.parse(body);
 
@@ -151,29 +171,32 @@ export async function POST(req: Request) {
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }
 
 export async function PATCH(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const taskId = searchParams.get("taskId");
-
-  if (!taskId) {
-    return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
-  }
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const taskId = searchParams.get("taskId");
+
+    if (!taskId) {
+      return NextResponse.json(
+        { error: "Task ID is required" },
+        { status: 400 },
+      );
+    }
+
     const body = await req.json();
     const task = await prisma.task.findUnique({
       where: { id: taskId },
@@ -273,12 +296,6 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json(updatedTask);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const updateSubtaskSchema = z.object({
   title: z.string().min(1).optional(),
@@ -14,6 +19,11 @@ export async function PATCH(
   { params }: { params: Promise<{ subtaskId: string }> },
 ) {
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { subtaskId } = await params;
     const supabase = await createClient();
     const {
@@ -34,11 +44,7 @@ export async function PATCH(
 
     return NextResponse.json(subtask);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 400 });
-    }
-    console.error("[SUBTASK_PATCH]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -47,6 +53,11 @@ export async function DELETE(
   { params }: { params: Promise<{ subtaskId: string }> },
 ) {
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { subtaskId } = await params;
     const supabase = await createClient();
     const {
@@ -63,7 +74,6 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error("[SUBTASK_DELETE]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }

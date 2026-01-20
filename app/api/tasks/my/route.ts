@@ -1,17 +1,27 @@
 import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 export async function GET(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const userId = user.id;
-  const { searchParams } = new URL(req.url);
-  const workspaceSlug = searchParams.get("workspaceSlug");
-
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const userId = user.id;
+    const { searchParams } = new URL(req.url);
+    const workspaceSlug = searchParams.get("workspaceSlug");
+
     // Get all tasks assigned to the user
     const whereClause: {
       assigneeId: string;
@@ -57,10 +67,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json(tasks);
   } catch (error) {
-    console.error("Error fetching user tasks:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

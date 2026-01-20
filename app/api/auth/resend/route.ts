@@ -1,8 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import {
+  rateLimitAuth,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 export async function POST(req: Request) {
   try {
+    // Apply auth rate limiting (5 req/min)
+    const rateLimitResult = await rateLimitAuth(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { email } = await req.json();
 
     if (!email) {
@@ -27,10 +38,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: "Verification email resent" });
   } catch (error) {
-    console.error("[AUTH_RESEND_POST]", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

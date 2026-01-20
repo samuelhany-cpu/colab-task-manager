@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import {
+  rateLimitAuth,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const BLOCKED_DOMAINS = [
   "example.com",
@@ -34,6 +39,12 @@ import { checkUserRedundancy } from "@/lib/auth-utils";
 
 export async function POST(req: Request) {
   try {
+    // Apply auth rate limiting (5 req/min)
+    const rateLimitResult = await rateLimitAuth(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const body = await req.json();
     const { name, email, password } = registerSchema.parse(body);
 
@@ -100,13 +111,6 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Registration error:", error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

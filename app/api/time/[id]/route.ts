@@ -1,20 +1,29 @@
 import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const userId = user.id;
-  const { id } = await params;
-
   try {
-    // Check if the time entry belongs to the user
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const userId = user.id;
+    const { id } = await params;
+
     const entry = await prisma.timeEntry.findUnique({
       where: { id },
     });
@@ -36,10 +45,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting time entry:", error);
-    return NextResponse.json(
-      { error: "Failed to delete time entry" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

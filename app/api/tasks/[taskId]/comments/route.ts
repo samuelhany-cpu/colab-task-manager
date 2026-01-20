@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyCommentMention } from "@/lib/notifications";
 import { z } from "zod";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const commentSchema = z.object({
   content: z.string().min(1),
@@ -13,6 +18,11 @@ export async function GET(
   { params }: { params: Promise<{ taskId: string }> },
 ) {
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { taskId } = await params;
     const supabase = await createClient();
     const {
@@ -40,8 +50,7 @@ export async function GET(
 
     return NextResponse.json(comments);
   } catch (error) {
-    console.error("[COMMENTS_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -50,6 +59,11 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> },
 ) {
   try {
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { taskId } = await params;
     const supabase = await createClient();
     const {
@@ -86,8 +100,7 @@ export async function POST(
     });
 
     // Handle @mentions
-    // Extract mentions from content (e.g., @Name)
-    const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g; // Standard mentioned format: @[Name](userId)
+    const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
     const mentions = Array.from(content.matchAll(mentionRegex));
     const processedMentions = new Set<string>();
 
@@ -110,7 +123,6 @@ export async function POST(
       }
     }
 
-    // Also trigger activity
     await prisma.activity.create({
       data: {
         type: "COMMENT_ADDED",
@@ -125,10 +137,6 @@ export async function POST(
 
     return NextResponse.json(comment);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 400 });
-    }
-    console.error("[COMMENTS_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const workspaceSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -12,72 +17,88 @@ const workspaceSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const includeProjects = searchParams.get("includeProjects") === "true";
-  console.log("[API/Workspaces] GET request received. Fetching user...");
-  const user = await getCurrentUser();
+  try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
-  if (!user) {
-    console.warn("[API/Workspaces] GET request unauthorized: No user found.");
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    const { searchParams } = new URL(req.url);
+    const includeProjects = searchParams.get("includeProjects") === "true";
+    console.log("[API/Workspaces] GET request received. Fetching user...");
+    const user = await getCurrentUser();
 
-  console.log(`[API/Workspaces] Fetching workspaces for user: ${user.id}`);
-  const workspaces = await prisma.workspace.findMany({
-    where: {
-      members: {
-        some: {
-          userId: user.id,
-        },
-      },
-    },
-    include: {
-      invitations: {
-        where: {
-          acceptedAt: null,
-          expiresAt: { gt: new Date() },
-        },
-      },
-      members: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              image: true,
-            },
+    if (!user) {
+      console.warn("[API/Workspaces] GET request unauthorized: No user found.");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.log(`[API/Workspaces] Fetching workspaces for user: ${user.id}`);
+    const workspaces = await prisma.workspace.findMany({
+      where: {
+        members: {
+          some: {
+            userId: user.id,
           },
         },
       },
-      ...(includeProjects
-        ? {
-            projects: {
+      include: {
+        invitations: {
+          where: {
+            acceptedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        },
+        members: {
+          include: {
+            user: {
               select: {
                 id: true,
                 name: true,
+                email: true,
+                image: true,
               },
             },
-          }
-        : {}),
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+          },
+        },
+        ...(includeProjects
+          ? {
+              projects: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            }
+          : {}),
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-  console.log(`[API/Workspaces] Found ${workspaces.length} workspaces.`);
-  return NextResponse.json(workspaces);
+    console.log(`[API/Workspaces] Found ${workspaces.length} workspaces.`);
+    return NextResponse.json(workspaces);
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { name, slug } = workspaceSchema.parse(body);
 
@@ -108,13 +129,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(workspace, { status: 201 });
   } catch (error) {
-    console.error("Workspace creation error:", error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }
