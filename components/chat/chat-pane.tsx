@@ -64,6 +64,15 @@ interface ChatPaneProps {
   isThreadView?: boolean;
 }
 
+interface Member {
+  id: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
+}
+
 export default function ChatPane({
   workspaceId,
   projectId,
@@ -94,6 +103,13 @@ export default function ChatPane({
 
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [members, setMembers] = useState<Member[]>([]);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [cursorPos, setCursorPos] = useState(0);
+
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Search
   const [searchResults, setSearchResults] = useState<Message[] | null>(null);
@@ -175,6 +191,30 @@ export default function ChatPane({
       return `/api/chat?receiverId=${encodeURIComponent(receiverId)}`;
     return `/api/chat`;
   }, [parentId, workspaceId, projectId, receiverId, conversationId, dmKey]);
+
+  // Fetch members for mentions
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchMembers = async () => {
+      try {
+        let url = "";
+        if (projectId) url = `/api/projects/${projectId}/members`;
+        else if (workspaceId) url = `/api/workspaces/${workspaceId}/members`;
+        else return;
+
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setMembers(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch members:", e);
+      }
+    };
+
+    fetchMembers();
+  }, [user?.id, projectId, workspaceId]);
 
   // Fetch messages + subscribe realtime
   useEffect(() => {
@@ -466,9 +506,21 @@ export default function ChatPane({
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    const pos = e.target.selectionStart || 0;
     setInput(value);
+    setCursorPos(pos);
 
     if (!user?.id) return;
+
+    // Mention logic
+    const lastAt = value.lastIndexOf("@", pos - 1);
+    const hasSpaceAfterAt = value.slice(lastAt, pos).includes(" ");
+    if (lastAt !== -1 && !hasSpaceAfterAt) {
+      setMentionSearch(value.slice(lastAt + 1, pos));
+      setShowMentions(true);
+    } else {
+      setShowMentions(false);
+    }
 
     // Mark typing true when there is content, false when empty.
     const currentlyTyping = value.length > 0;
@@ -487,6 +539,25 @@ export default function ChatPane({
       void trackTyping(false);
     }, 900);
   };
+
+  const insertMention = (member: Member) => {
+    const lastAt = input.lastIndexOf("@", cursorPos - 1);
+    const before = input.slice(0, lastAt);
+    const after = input.slice(cursorPos);
+    const mentionText = `@[${member.user.name || member.user.email}](${member.user.id})`;
+
+    setInput(`${before}${mentionText} ${after}`);
+    setShowMentions(false);
+    inputRef.current?.focus();
+  };
+
+  const filteredMembers = useMemo(() => {
+    return members.filter((m) =>
+      (m.user.name || m.user.email || "")
+        .toLowerCase()
+        .includes(mentionSearch.toLowerCase()),
+    );
+  }, [members, mentionSearch]);
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
@@ -953,62 +1024,93 @@ export default function ChatPane({
         )}
       </div>
 
-      <form
-        className="p-4 border-t border-border flex gap-3 bg-card"
-        onSubmit={handleSend}
-      >
-        <input
-          placeholder={
-            editingMessage ? "Editing message..." : "Type a message..."
-          }
-          className={cn(
-            "flex-1 h-11 bg-muted border border-border rounded-xl px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all",
-            editingMessage && "ring-2 ring-primary/20 border-primary",
+      <div className="relative border-t border-border bg-card p-4">
+        {showMentions && filteredMembers.length > 0 && (
+          <div className="absolute bottom-full left-4 mb-2 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-[100] animate-in slide-in-from-bottom-2">
+            <div className="p-2 border-b border-border bg-muted/50">
+              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                Mention Member
+              </span>
+            </div>
+            <div className="max-h-48 overflow-y-auto custom-scrollbar">
+              {filteredMembers.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => insertMention(m)}
+                  className="w-full text-left px-4 py-2 hover:bg-muted flex items-center gap-3 transition-colors"
+                >
+                  <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary">
+                    <UserIcon size={12} />
+                  </div>
+                  <div className="flex-1 truncate">
+                    <p className="text-xs font-bold truncate">
+                      {m.user.name || "Anonymous"}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground truncate">
+                      {m.user.email}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <form className="flex gap-3" onSubmit={handleSend}>
+          <input
+            ref={inputRef}
+            placeholder={
+              editingMessage ? "Editing message..." : "Type a message..."
+            }
+            className={cn(
+              "flex-1 h-11 bg-muted border border-border rounded-xl px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all",
+              editingMessage && "ring-2 ring-primary/20 border-primary",
+            )}
+            value={input}
+            onChange={handleInputChange}
+          />
+
+          {editingMessage && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingMessage(null);
+                setInput("");
+              }}
+              className="w-11 h-11 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Cancel edit"
+            >
+              <X size={18} />
+            </button>
           )}
-          value={input}
-          onChange={handleInputChange}
+
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            className="w-11 h-11 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-soft"
+            aria-label="Send"
+          >
+            <Send size={18} />
+          </button>
+        </form>
+
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          userId={selectedUserId}
         />
 
-        {editingMessage && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingMessage(null);
-              setInput("");
-            }}
-            className="w-11 h-11 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Cancel edit"
-          >
-            <X size={18} />
-          </button>
-        )}
-
-        <button
-          type="submit"
-          disabled={!input.trim()}
-          className="w-11 h-11 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-soft"
-          aria-label="Send"
-        >
-          <Send size={18} />
-        </button>
-      </form>
-
-      <UserProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        userId={selectedUserId}
-      />
-
-      <ConfirmDialog
-        isOpen={!!messageToDelete}
-        onClose={() => setMessageToDelete(null)}
-        onConfirm={confirmDelete}
-        title="Delete Message"
-        description="Are you sure you want to delete this message? This action cannot be undone."
-        confirmText="Delete"
-        variant="destructive"
-        loading={isDeleting}
-      />
+        <ConfirmDialog
+          isOpen={!!messageToDelete}
+          onClose={() => setMessageToDelete(null)}
+          onConfirm={confirmDelete}
+          title="Delete Message"
+          description="Are you sure you want to delete this message? This action cannot be undone."
+          confirmText="Delete"
+          variant="destructive"
+          loading={isDeleting}
+        />
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   assertConversationMember,
 } from "@/lib/auth/guards";
 import { handleApiError } from "@/lib/api/error-handler";
+import { notifyChatMention } from "@/lib/notifications";
 import {
   rateLimitChat,
   createRateLimitResponse,
@@ -348,7 +349,58 @@ export async function POST(req: Request) {
       },
     });
 
-    // 9. Broadcast (non-blocking)
+    // 9. Handle @mentions
+    const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+    const mentions = Array.from(sanitized.content.matchAll(mentionRegex));
+    const processedMentions = new Set<string>();
+
+    for (const match of mentions) {
+      const mentionedUserId = match[2];
+      if (
+        mentionedUserId !== senderId &&
+        !processedMentions.has(mentionedUserId)
+      ) {
+        processedMentions.add(mentionedUserId);
+
+        // Non-blocking notification
+        (async () => {
+          try {
+            // We need workspace slug for the link. Let's find it if not provided.
+            let workspaceSlug = "";
+            if (sanitized.workspaceId) {
+              const ws = await prisma.workspace.findUnique({
+                where: { id: sanitized.workspaceId },
+                select: { slug: true },
+              });
+              workspaceSlug = ws?.slug || "";
+            } else if (sanitized.projectId) {
+              const project = await prisma.project.findUnique({
+                where: { id: sanitized.projectId },
+                include: { workspace: { select: { slug: true } } },
+              });
+              workspaceSlug = project?.workspace.slug || "";
+            }
+
+            await notifyChatMention({
+              userId: mentionedUserId,
+              mentionerName: message.sender.name || "A user",
+              workspaceSlug,
+              projectId: sanitized.projectId || undefined,
+              receiverId: sanitized.receiverId || undefined,
+              conversationId: sanitized.conversationId || undefined,
+            });
+          } catch (e) {
+            console.error(
+              "[CHAT_MENTION_NOTIFICATION_FAILED]",
+              mentionedUserId,
+              e,
+            );
+          }
+        })();
+      }
+    }
+
+    // 10. Broadcast (non-blocking)
     (async () => {
       try {
         const { createClient } = await import("@/lib/supabase/server");

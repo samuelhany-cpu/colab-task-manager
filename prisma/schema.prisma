@@ -408,6 +408,7 @@ model Notification {
 enum NotificationType {
   TASK_ASSIGNED
   COMMENT_MENTION
+  CHAT_MENTION
   MESSAGE_RECEIVED
   PROJECT_INVITE
 }

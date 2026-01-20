@@ -118,3 +118,34 @@ export async function notifyProjectInvite(
     link: `/app/${workspaceSlug}/projects/${projectId}`,
   });
 }
+
+/**
+ * Create notification when mentioned in a chat message
+ */
+export async function notifyChatMention({
+  userId,
+  mentionerName,
+  workspaceSlug,
+  projectId,
+  receiverId,
+  conversationId,
+}: {
+  userId: string;
+  mentionerName: string;
+  workspaceSlug?: string;
+  projectId?: string;
+  receiverId?: string;
+  conversationId?: string;
+}) {
+  let link = `/app/${workspaceSlug || "default"}/chat`;
+  if (projectId) link += `?project=${projectId}`;
+  else if (receiverId) link += `?receiver=${receiverId}`;
+  else if (conversationId) link += `?conversation=${conversationId}`;
+
+  return createNotification({
+    userId,
+    type: "CHAT_MENTION",
+    content: `${mentionerName} mentioned you in a chat message`,
+    link,
+  });
+}
