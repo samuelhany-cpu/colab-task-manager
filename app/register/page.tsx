@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Mail,
@@ -19,10 +18,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
   const emailRef = useRef("");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -76,6 +76,33 @@ export default function RegisterPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (resending) return;
+    setResending(true);
+    setError(null);
+    setResendSuccess(false);
+
+    try {
+      const res = await fetch("/api/auth/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailRef.current }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to resend");
+
+      setResendSuccess(true);
+      setTimeout(() => setResendSuccess(false), 5000);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to resend verification",
+      );
+    } finally {
+      setResending(false);
+    }
+  };
+
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6 relative overflow-hidden text-foreground">
@@ -94,18 +121,42 @@ export default function RegisterPage() {
               </span>
             </p>
           </div>
-          <Button
-            asChild
-            className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
-          >
-            <Link href="/login">
-              Continue to Login
-              <ArrowRight
-                size={20}
-                className="ml-2 group-hover:translate-x-1 transition-transform"
-              />
-            </Link>
-          </Button>
+          <div className="w-full space-y-3">
+            <Button
+              asChild
+              className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
+            >
+              <Link href="/login">
+                Continue to Login
+                <ArrowRight
+                  size={20}
+                  className="ml-2 group-hover:translate-x-1 transition-transform"
+                />
+              </Link>
+            </Button>
+
+            <button
+              onClick={handleResend}
+              disabled={resending}
+              className="text-xs font-bold text-mutedForeground hover:text-primary transition-colors disabled:opacity-50"
+            >
+              {resending ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="animate-spin" size={12} /> Sending...
+                </span>
+              ) : resendSuccess ? (
+                <span className="text-green-500 flex items-center gap-2 justify-center">
+                  <CheckCircle size={12} /> Link Sent!
+                </span>
+              ) : (
+                "Didn't receive the email? Click to resend"
+              )}
+            </button>
+
+            {error && (
+              <p className="text-[10px] text-destructive font-bold">{error}</p>
+            )}
+          </div>
         </Card>
       </div>
     );

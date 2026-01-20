@@ -34,7 +34,7 @@ export default function ChatBox({
       {activeThread && (
         <ChatPane
           parentId={activeThread.id}
-          className="w-[400px] border-l border-border bg-muted/30"
+          className="w-100 border-l border-border bg-muted/30"
           isThreadView
           onClose={() => setActiveThread(null)}
           // Pass context if needed for permissions/channel subscription rules

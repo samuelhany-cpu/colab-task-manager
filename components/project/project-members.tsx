@@ -153,20 +153,22 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
     }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <Loader2 className="w-12 h-12 animate-spin text-primary opacity-20" />
-    </div>
-  );
-
-  if (error) return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex items-center gap-3 p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl">
-        <AlertCircle size={20} />
-        <span className="font-bold">{error}</span>
+  if (loading)
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-12 h-12 animate-spin text-primary opacity-20" />
       </div>
-    </div>
-  );
+    );
+
+  if (error)
+    return (
+      <div className="p-8 max-w-7xl mx-auto">
+        <div className="flex items-center gap-3 p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl">
+          <AlertCircle size={20} />
+          <span className="font-bold">{error}</span>
+        </div>
+      </div>
+    );
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8">
@@ -183,7 +185,10 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
 
       <div className="grid grid-cols-1 gap-4">
         {members.map((member) => (
-          <div key={member.id} className="flex items-center justify-between p-5 bg-card border border-border rounded-2xl shadow-soft transition-all hover:translate-y-[-2px] hover:shadow-lg">
+          <div
+            key={member.id}
+            className="flex items-center justify-between p-5 bg-card border border-border rounded-2xl shadow-soft transition-all hover:translate-y-[-2px] hover:shadow-lg"
+          >
             <div className="flex items-center gap-4">
               {member.user.image ? (
                 <div
@@ -272,7 +277,9 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
         {members.length === 0 && (
           <div className="flex flex-col items-center justify-center p-16 text-mutedForeground gap-4">
             <User2 size={64} className="opacity-20" />
-            <p className="text-lg font-medium">No members yet. Add your first member to get started!</p>
+            <p className="text-lg font-medium">
+              No members yet. Add your first member to get started!
+            </p>
           </div>
         )}
       </div>
@@ -297,7 +304,9 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
 
             <form onSubmit={handleAddMember} className="flex flex-col gap-6">
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-bold text-mutedForeground">Email Address</label>
+                <label className="text-sm font-bold text-mutedForeground">
+                  Email Address
+                </label>
                 <input
                   type="email"
                   value={newMemberEmail}
@@ -312,7 +321,9 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-bold text-mutedForeground">Role</label>
+                <label className="text-sm font-bold text-mutedForeground">
+                  Role
+                </label>
                 <select
                   value={newMemberRole}
                   onChange={(e) =>
@@ -347,7 +358,11 @@ export default function ProjectMembers({ projectId }: ProjectMembersProps) {
                 >
                   Cancel
                 </button>
-                <button type="submit" disabled={adding} className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-soft hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-soft hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                >
                   {adding ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />

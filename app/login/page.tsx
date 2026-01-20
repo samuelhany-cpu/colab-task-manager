@@ -40,6 +40,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [email, setEmail] = useState("");
   // Removed unused password state
@@ -146,6 +147,34 @@ function LoginForm() {
     }
   };
 
+  const handleResendVerification = async () => {
+    if (!email || resending) return;
+    setResending(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const res = await fetch("/api/auth/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to resend");
+
+      setSuccess(
+        "Verification email has been resent. Please check your inbox.",
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to resend verification",
+      );
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6 relative overflow-hidden">
       {/* Decorative Orbs */}
@@ -200,8 +229,25 @@ function LoginForm() {
           className="space-y-6"
         >
           {error && (
-            <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl text-sm font-bold animate-in shake duration-300">
-              {error}
+            <div className="p-4 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl text-sm font-bold animate-in shake duration-300 space-y-3">
+              <p>{error}</p>
+              {(error.toLowerCase().includes("confirmed") ||
+                error.toLowerCase().includes("verified")) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResendVerification}
+                  disabled={resending}
+                  className="w-full h-10 rounded-lg text-xs font-black uppercase tracking-widest border-destructive/20 hover:bg-destructive/5"
+                >
+                  {resending ? (
+                    <Loader2 className="animate-spin" size={14} />
+                  ) : (
+                    "Resend Verification Link"
+                  )}
+                </Button>
+              )}
             </div>
           )}
 

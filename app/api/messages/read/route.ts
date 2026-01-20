@@ -1,22 +1,80 @@
-import { getCurrentUser } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  requireUser,
+  assertWorkspaceMember,
+  assertProjectMember,
+  assertConversationMember,
+  NotFoundError,
+  ForbiddenError,
+} from "@/lib/auth/guards";
+import { handleApiError } from "@/lib/api/error-handler";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+
+const readSchema = z.object({
+  messageId: z.string().cuid(),
+  workspaceId: z.string().cuid().optional(),
+  projectId: z.string().cuid().optional(),
+  receiverId: z.string().cuid().optional(),
+});
 
 export async function POST(req: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    // 1. Rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
     }
 
+    // 2. Authentication
+    const user = await requireUser();
+
+    // 3. Validate input
     const body = await req.json();
-    const { messageId, workspaceId, projectId, receiverId } = body;
+    const { messageId, workspaceId, projectId, receiverId } =
+      readSchema.parse(body);
 
-    if (!messageId) {
-      return new NextResponse("Message ID is required", { status: 400 });
+    // 4. Fetch message to verify context and authorization
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        senderId: true,
+        receiverId: true,
+        workspaceId: true,
+        projectId: true,
+        conversationId: true,
+        parentId: true,
+        status: true,
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundError("Message not found");
     }
 
-    // Determine which unique constraint to use based on context
+    // 5. Authorization: Verify user has access to message context
+    if (message.workspaceId) {
+      await assertWorkspaceMember(user.id, message.workspaceId);
+    } else if (message.projectId) {
+      await assertProjectMember(user.id, message.projectId);
+    } else if (message.conversationId) {
+      await assertConversationMember(user.id, message.conversationId);
+    } else if (message.receiverId) {
+      // DM: user must be sender or receiver
+      if (user.id !== message.senderId && user.id !== message.receiverId) {
+        throw new ForbiddenError("Not authorized to mark this message as read");
+      }
+    } else {
+      throw new ForbiddenError("Message has no valid context");
+    }
+
+    // 6. Determine unique constraint based on context
     let where;
     if (workspaceId) {
       where = { userId_workspaceId: { userId: user.id, workspaceId } };
@@ -25,13 +83,13 @@ export async function POST(req: Request) {
     } else if (receiverId) {
       where = { userId_receiverId: { userId: user.id, receiverId } };
     } else {
-      return new NextResponse(
-        "Context required (workspaceId, projectId, or receiverId)",
+      return NextResponse.json(
+        { error: "Context required (workspaceId, projectId, or receiverId)" },
         { status: 400 },
       );
     }
 
-    // Upsert the read status
+    // 7. Upsert the read status
     const messageRead = await prisma.messageRead.upsert({
       where,
       create: {
@@ -48,33 +106,29 @@ export async function POST(req: Request) {
       },
     });
 
-    // Update message status to READ
-    const message = await prisma.message.update({
-      where: { id: messageId },
-      data: { status: "READ" },
-      select: {
-        id: true,
-        status: true,
-        workspaceId: true,
-        projectId: true,
-        receiverId: true,
-        parentId: true,
-      },
-    });
+    // 8. Update message status to READ (only if user is receiver)
+    if (user.id === message.receiverId) {
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { status: "READ" },
+      });
+    }
 
-    // Broadcast read status (non-blocking)
+    // 9. Broadcast read status (non-blocking)
     (async () => {
       try {
-        const { createClient } = await import("@/lib/supabase/server");
         const supabase = await createClient();
-
         const channelId = message.parentId
           ? `thread:${message.parentId}`
           : message.workspaceId
             ? `workspace:${message.workspaceId}`
             : message.projectId
               ? `project:${message.projectId}`
-              : `user:${message.receiverId}`;
+              : message.conversationId
+                ? `conversation:${message.conversationId}`
+                : message.receiverId
+                  ? `dm:${[message.senderId, message.receiverId].sort().join(":")}`
+                  : null;
 
         if (channelId) {
           const channel = supabase.channel(channelId);
@@ -84,8 +138,9 @@ export async function POST(req: Request) {
             event: "message-read",
             payload: {
               id: message.id,
-              status: message.status,
+              status: "READ",
               readBy: user.id,
+              lastReadAt: messageRead.lastReadAt,
             },
           });
         }
@@ -94,9 +149,12 @@ export async function POST(req: Request) {
       }
     })();
 
-    return NextResponse.json(messageRead);
+    const response = NextResponse.json(messageRead);
+    Object.entries(rateLimitResult.headers).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error) {
-    console.error("[MESSAGE_READ_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }

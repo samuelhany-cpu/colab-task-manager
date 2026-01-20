@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Upload, File as FileIcon, Download, Loader2, FileText, ImageIcon, Music, Video, Archive } from "lucide-react";
+import {
+  Upload,
+  File as FileIcon,
+  Download,
+  Loader2,
+  FileText,
+  ImageIcon,
+  Music,
+  Video,
+  Archive,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface FileEntry {
@@ -75,30 +85,41 @@ export default function FileList({ projectId }: { projectId: string }) {
     if (mime.startsWith("image/")) return <ImageIcon size={20} />;
     if (mime.startsWith("video/")) return <Video size={20} />;
     if (mime.startsWith("audio/")) return <Music size={20} />;
-    if (mime.includes("pdf") || mime.includes("text")) return <FileText size={20} />;
-    if (mime.includes("zip") || mime.includes("tar") || mime.includes("compressed")) return <Archive size={20} />;
+    if (mime.includes("pdf") || mime.includes("text"))
+      return <FileText size={20} />;
+    if (
+      mime.includes("zip") ||
+      mime.includes("tar") ||
+      mime.includes("compressed")
+    )
+      return <Archive size={20} />;
     return <FileIcon size={20} />;
   };
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center p-20 gap-4 text-mutedForeground">
-      <Loader2 className="animate-spin opacity-20" size={40} />
-      <span className="text-sm font-bold uppercase tracking-widest">Loading assets...</span>
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="flex flex-col items-center justify-center p-20 gap-4 text-mutedForeground">
+        <Loader2 className="animate-spin opacity-20" size={40} />
+        <span className="text-sm font-bold uppercase tracking-widest">
+          Loading assets...
+        </span>
+      </div>
+    );
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
           <h2 className="text-2xl font-bold">Project Files</h2>
-          <p className="text-sm text-mutedForeground">Manage and share assets for this project</p>
+          <p className="text-sm text-mutedForeground">
+            Manage and share assets for this project
+          </p>
         </div>
         <div className="relative inline-block group">
           <button
             className={cn(
               "flex items-center gap-3 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-soft transition-all hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:pointer-events-none",
-              uploading && "animate-pulse"
+              uploading && "animate-pulse",
             )}
             disabled={uploading}
           >
@@ -129,7 +150,10 @@ export default function FileList({ projectId }: { projectId: string }) {
                 {getFileIcon(file.mimeType)}
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-foreground truncate" title={file.name}>
+                <h4
+                  className="font-bold text-foreground truncate"
+                  title={file.name}
+                >
                   {file.name}
                 </h4>
                 <p className="text-[10px] font-extrabold text-mutedForeground uppercase tracking-wider">
@@ -140,8 +164,12 @@ export default function FileList({ projectId }: { projectId: string }) {
 
             <div className="flex items-center justify-between pt-4 border-t border-border mt-auto">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-bold text-foreground/80">{formatSize(file.size)}</span>
-                <span className="text-[10px] text-mutedForeground">by {file.uploader.name}</span>
+                <span className="text-xs font-bold text-foreground/80">
+                  {formatSize(file.size)}
+                </span>
+                <span className="text-[10px] text-mutedForeground">
+                  by {file.uploader.name}
+                </span>
               </div>
               <a
                 href={file.url}
@@ -162,7 +190,9 @@ export default function FileList({ projectId }: { projectId: string }) {
             </div>
             <div className="text-center">
               <p className="text-lg font-bold text-foreground">No files yet</p>
-              <p className="text-sm">Upload your first document or image to get started.</p>
+              <p className="text-sm">
+                Upload your first document or image to get started.
+              </p>
             </div>
           </div>
         )}

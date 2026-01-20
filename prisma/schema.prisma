@@ -37,6 +37,7 @@ model User {
   fileVersions      FileVersion[]
   messageReads      MessageRead[]
   conversationMemberships ConversationMember[]
+  invitationsSent     Invitation[]      @relation("SentInvitations")
 }
 
 model Conversation {
@@ -80,6 +81,7 @@ model Workspace {
   tags     Tag[]
   messages Message[]
   conversations Conversation[]
+  invitations Invitation[]
 }
 
 model WorkspaceMember {
@@ -421,4 +423,22 @@ model Subtask {
   updatedAt DateTime @updatedAt
 
   @@index([taskId])
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  email       String
+  workspaceId String
+  inviterId   String
+  role        Role     @default(MEMBER)
+  token       String   @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter     User      @relation("SentInvitations", fields: [inviterId], references: [id])
+
+  @@unique([workspaceId, email])
+  @@index([token])
 }

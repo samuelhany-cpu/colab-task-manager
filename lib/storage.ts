@@ -9,14 +9,12 @@ export async function uploadFile(
 ) {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(
-    key,
-    buffer,
-    {
+  const { data, error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .upload(key, buffer, {
       upsert: true,
       contentType,
-    },
-  );
+    });
 
   if (error) throw error;
   return data;

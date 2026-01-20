@@ -27,26 +27,32 @@ export async function GET(
       );
     }
 
-    const members = await prisma.workspaceMember.findMany({
-      where: {
-        workspaceId: workspace.id,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
+    const [members, invitations] = await Promise.all([
+      prisma.workspaceMember.findMany({
+        where: { workspaceId: workspace.id },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
           },
         },
-      },
-      orderBy: {
-        role: "asc",
-      },
-    });
+        orderBy: { role: "asc" },
+      }),
+      prisma.invitation.findMany({
+        where: {
+          workspaceId: workspace.id,
+          acceptedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
-    return NextResponse.json(members);
+    return NextResponse.json({ members, invitations });
   } catch (error) {
     console.error("[WORKSPACE_MEMBERS_GET_ERROR]", error);
     return NextResponse.json(

@@ -13,6 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { useUser } from "@/components/providers/user-provider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,14 @@ interface Member {
   role: string;
 }
 
+interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  acceptedAt: string | null;
+  expiresAt: string;
+}
+
 export default function MembersPage({
   params,
 }: {
@@ -38,24 +47,26 @@ export default function MembersPage({
   const { slug } = use(params);
   const { user } = useUser();
 
+  console.log("[MEMBERS_PAGE] Rendering. Slug:", slug, "User:", user?.email);
+
   const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"MEMBER" | "OWNER">("MEMBER");
   const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMembers = async () => {
+      console.log("[MEMBERS_PAGE] Fetching members for slug:", slug);
       try {
-        const res = await fetch("/api/workspaces");
+        const res = await fetch(`/api/workspaces/${slug}/members`);
         if (res.ok) {
-          const workspaces = await res.json();
-          const workspace = workspaces.find(
-            (w: { slug: string; members: Member[] }) => w.slug === slug,
-          );
-          if (workspace) {
-            setMembers(workspace.members || []);
-          }
+          const data = await res.json();
+          setMembers(data.members || []);
+          setInvitations(data.invitations || []);
         }
       } catch (e: unknown) {
         console.error("Members fetch error:", e);
@@ -69,16 +80,52 @@ export default function MembersPage({
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    console.log(
+      "[MEMBERS_PAGE] handleInvite triggered with email:",
+      email,
+      "role:",
+      role,
+    );
+    if (!email) {
+      console.warn("[MEMBERS_PAGE] No email provided, returning.");
+      return;
+    }
 
     setInviting(true);
-    // Mocking invitation logic
-    setTimeout(() => {
-      setInviting(false);
+    setError(null);
+
+    console.log(
+      "[MEMBERS_PAGE] Attempting fetch to:",
+      `/api/workspaces/${slug}/invite`,
+    );
+
+    try {
+      const res = await fetch(`/api/workspaces/${slug}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, role }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send invitation");
+      }
+
       setInviteSuccess(true);
       setEmail("");
+      // Refresh invitations list
+      const membersRes = await fetch(`/api/workspaces/${slug}/members`);
+      if (membersRes.ok) {
+        const membersData = await membersRes.json();
+        setInvitations(membersData.invitations || []);
+      }
       setTimeout(() => setInviteSuccess(false), 3000);
-    }, 1500);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setInviting(false);
+    }
   };
 
   if (loading)
@@ -170,6 +217,48 @@ export default function MembersPage({
               ))}
             </div>
           </Card>
+
+          {invitations.length > 0 && (
+            <div className="space-y-4 pt-4">
+              <div className="flex items-center gap-2 px-1">
+                <Mail size={14} className="text-mutedForeground" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-mutedForeground">
+                  Pending Invitations ({invitations.length})
+                </h3>
+              </div>
+              <Card className="rounded-2xl border-border/40 shadow-sm bg-card overflow-hidden">
+                <div className="divide-y divide-border/40">
+                  {invitations.map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="p-4 flex items-center justify-between hover:bg-muted/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-mutedForeground font-bold text-sm">
+                          {inv.email[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-foreground">
+                            {inv.email}
+                          </div>
+                          <div className="text-[10px] text-mutedForeground font-medium">
+                            Expires{" "}
+                            {new Date(inv.expiresAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="px-2 py-0.5 text-[8px] font-black uppercase tracking-widest bg-muted/30 border-none"
+                      >
+                        {inv.role}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
 
         {/* Sidebar Actions */}
@@ -208,6 +297,12 @@ export default function MembersPage({
                 </div>
               </div>
 
+              {error && (
+                <p className="text-xs text-destructive font-bold px-1 animate-in shake duration-300">
+                  {error}
+                </p>
+              )}
+
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-mutedForeground ml-1">
                   Member Role
@@ -215,16 +310,24 @@ export default function MembersPage({
                 <div className="flex gap-2">
                   <Button
                     type="button"
-                    variant="secondary"
-                    className="flex-1 h-12 rounded-xl text-xs font-bold gap-2"
+                    variant={role === "MEMBER" ? "secondary" : "ghost"}
+                    onClick={() => setRole("MEMBER")}
+                    className={cn(
+                      "flex-1 h-12 rounded-xl text-xs font-bold gap-2",
+                      role !== "MEMBER" && "border border-border/40",
+                    )}
                   >
                     <Users size={14} />
                     Member
                   </Button>
                   <Button
                     type="button"
-                    variant="ghost"
-                    className="flex-1 h-12 rounded-xl text-xs font-bold gap-2 border border-border/40"
+                    variant={role === "OWNER" ? "secondary" : "ghost"}
+                    onClick={() => setRole("OWNER")}
+                    className={cn(
+                      "flex-1 h-12 rounded-xl text-xs font-bold gap-2",
+                      role !== "OWNER" && "border border-border/40",
+                    )}
                   >
                     <Shield size={14} />
                     Admin

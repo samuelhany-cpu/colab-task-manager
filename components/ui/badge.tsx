@@ -19,12 +19,12 @@ const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
             destructive: "bg-destructive text-destructive-foreground",
             outline: "border border-border text-foreground",
           }[variant],
-          className
+          className,
         )}
         {...props}
       />
     );
-  }
+  },
 );
 
 Badge.displayName = "Badge";

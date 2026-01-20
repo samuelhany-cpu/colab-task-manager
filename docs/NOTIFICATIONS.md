@@ -14,16 +14,18 @@ The notifications system provides real-time and persistent notifications for use
 ✅ **Filter by type** (all, unread, tasks, messages)  
 ✅ **Browser notifications** with permission request  
 ✅ **Click to navigate** to relevant page  
-✅ **Preferences page** for notification settings  
+✅ **Preferences page** for notification settings
 
 ## Components
 
 ### NotificationDropdown
+
 Location: `components/notifications/notification-dropdown.tsx`
 
 Displays a dropdown with notifications, filters, and actions. Automatically integrated in the sidebar.
 
 ### Notification Preferences
+
 Location: `app/app/[slug]/settings/notifications/page.tsx`
 
 User preferences page for managing email and browser notification settings.
@@ -31,13 +33,16 @@ User preferences page for managing email and browser notification settings.
 ## API Endpoints
 
 ### GET /api/notifications
+
 Fetch user's notifications with optional filtering.
 
 **Query Parameters:**
+
 - `filter`: 'all' | 'unread' | 'TASK_ASSIGNED' | 'COMMENT_MENTION' | 'MESSAGE_RECEIVED' | 'PROJECT_INVITE'
 - `limit`: Number of notifications to fetch (default: 50)
 
 **Response:**
+
 ```json
 {
   "notifications": [
@@ -55,9 +60,11 @@ Fetch user's notifications with optional filtering.
 ```
 
 ### PATCH /api/notifications/[id]
+
 Mark a notification as read or unread.
 
 **Body:**
+
 ```json
 {
   "read": true
@@ -65,9 +72,11 @@ Mark a notification as read or unread.
 ```
 
 ### PATCH /api/notifications/read-all
+
 Mark all user's notifications as read.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -76,9 +85,11 @@ Mark all user's notifications as read.
 ```
 
 ### DELETE /api/notifications/[id]
+
 Delete a notification.
 
 **Response:**
+
 ```json
 {
   "success": true
@@ -90,6 +101,7 @@ Delete a notification.
 Location: `lib/notifications.ts`
 
 ### createNotification
+
 Generic function to create a notification.
 
 ```typescript
@@ -97,11 +109,12 @@ await createNotification({
   userId: "user-id",
   type: "TASK_ASSIGNED",
   content: "You have been assigned to task: New Task",
-  link: "/app/workspace/projects/project-id?task=task-id"
+  link: "/app/workspace/projects/project-id?task=task-id",
 });
 ```
 
 ### notifyTaskAssigned
+
 Notify user when assigned to a task.
 
 ```typescript
@@ -110,11 +123,12 @@ await notifyTaskAssigned(
   "Task Title",
   taskId,
   projectId,
-  workspaceSlug
+  workspaceSlug,
 );
 ```
 
 ### notifyCommentMention
+
 Notify user when mentioned in a comment.
 
 ```typescript
@@ -124,32 +138,24 @@ await notifyCommentMention(
   "Task Title",
   taskId,
   projectId,
-  workspaceSlug
+  workspaceSlug,
 );
 ```
 
 ### notifyMessageReceived
+
 Notify user of a new message.
 
 ```typescript
-await notifyMessageReceived(
-  userId,
-  "John Doe",
-  projectId,
-  workspaceSlug
-);
+await notifyMessageReceived(userId, "John Doe", projectId, workspaceSlug);
 ```
 
 ### notifyProjectInvite
+
 Notify user when added to a project.
 
 ```typescript
-await notifyProjectInvite(
-  userId,
-  "Project Name",
-  projectId,
-  workspaceSlug
-);
+await notifyProjectInvite(userId, "Project Name", projectId, workspaceSlug);
 ```
 
 ## Socket.io Integration
@@ -157,21 +163,26 @@ await notifyProjectInvite(
 ### Server Events (server.ts)
 
 **join-user**: Client joins their notification room
+
 ```typescript
 socket.emit("join-user", userId);
 ```
 
 **send-notification**: Server sends notification to user
+
 ```typescript
 socket.emit("send-notification", {
   userId: "user-id",
-  notification: { /* notification object */ }
+  notification: {
+    /* notification object */
+  },
 });
 ```
 
 ### Client Events (NotificationDropdown)
 
 **new-notification**: Received when a notification is sent
+
 ```typescript
 socket.on("new-notification", (notification) => {
   // Handle new notification
@@ -192,7 +203,7 @@ if (task.assigneeId && task.assigneeId !== oldAssigneeId) {
     task.title,
     task.id,
     task.projectId,
-    workspaceSlug
+    workspaceSlug,
   );
 }
 ```
@@ -212,7 +223,7 @@ for (const userId of mentions) {
     task.title,
     task.id,
     task.projectId,
-    workspaceSlug
+    workspaceSlug,
   );
 }
 ```
@@ -249,6 +260,7 @@ npx ts-node scripts/test-notifications.ts
 ```
 
 This will:
+
 1. Create test notifications
 2. Fetch notifications
 3. Mark as read
@@ -259,6 +271,7 @@ This will:
 ## Browser Notifications
 
 The system requests permission for browser notifications on first load. Users can:
+
 - Grant permission to receive desktop notifications
 - Deny permission to only use in-app notifications
 - Manage preferences in the settings page
@@ -276,16 +289,19 @@ The system requests permission for browser notifications on first load. Users ca
 ## Troubleshooting
 
 ### Notifications not appearing in real-time
+
 1. Check if Socket.io server is running (server.ts)
 2. Verify user joined their notification room (`join-user` event)
 3. Check browser console for Socket.io connection errors
 
 ### Browser notifications not showing
+
 1. Check if browser permission is granted
 2. Verify notification API is supported in the browser
 3. Check if notifications are blocked in browser settings
 
 ### Notification count not updating
+
 1. Ensure database is properly seeded
 2. Check API response in network tab
 3. Verify user authentication is working
@@ -293,6 +309,7 @@ The system requests permission for browser notifications on first load. Users ca
 ## Support
 
 For issues or questions, please check:
+
 - Implementation Roadmap: `IMPLEMENTATION_ROADMAP.md`
 - Test Script: `scripts/test-notifications.ts`
 - API Routes: `app/api/notifications/`

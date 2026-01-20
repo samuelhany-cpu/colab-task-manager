@@ -32,6 +32,12 @@ export async function GET(req: Request) {
       },
     },
     include: {
+      invitations: {
+        where: {
+          acceptedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      },
       members: {
         include: {
           user: {

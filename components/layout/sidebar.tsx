@@ -21,6 +21,33 @@ import { cn } from "@/lib/cn";
 import { Search, Users } from "lucide-react";
 import GroupDMModal from "@/components/chat/group-dm-modal";
 
+interface Project {
+  id: string;
+  name: string;
+}
+
+interface ConversationMember {
+  userId: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image?: string | null;
+  };
+}
+
+interface Conversation {
+  id: string;
+  name?: string | null;
+  members: ConversationMember[];
+}
+
+interface Workspace {
+  id: string;
+  slug: string;
+  projects?: Project[];
+}
+
 export default function Sidebar({
   workspaceSlug,
   onSearchClick,
@@ -32,22 +59,8 @@ export default function Sidebar({
   const supabase = createClient();
   const { user } = useUser();
   const [collapsed, setCollapsed] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [conversations, setConversations] = useState<
-    {
-      id: string;
-      name?: string | null;
-      members: {
-        userId: string;
-        user: {
-          id: string;
-          name: string | null;
-          email: string | null;
-          image?: string | null;
-        };
-      }[];
-    }[]
-  >([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [isGroupDMModalOpen, setIsGroupDMModalOpen] = useState(false);
 
@@ -56,9 +69,9 @@ export default function Sidebar({
       try {
         const res = await fetch("/api/workspaces?includeProjects=true");
         if (res.ok) {
-          const workspaces = await res.json();
+          const workspaces: Workspace[] = await res.json();
           const workspace = workspaces.find(
-            (w: { id: string; slug: string }) => w.slug === workspaceSlug,
+            (w: Workspace) => w.slug === workspaceSlug,
           );
 
           if (workspace) {
@@ -68,8 +81,8 @@ export default function Sidebar({
             }
           }
         }
-      } catch (e: unknown) {
-        console.error("Sidebar fetch error:", e);
+      } catch (error: unknown) {
+        console.error("Sidebar fetch error:", error);
       }
     };
 
@@ -84,11 +97,11 @@ export default function Sidebar({
           `/api/conversations?workspaceId=${workspaceId}`,
         );
         if (res.ok) {
-          const data = await res.json();
+          const data: Conversation[] = await res.json();
           setConversations(data);
         }
-      } catch (e) {
-        console.error("Failed to fetch conversations", e);
+      } catch (error: unknown) {
+        console.error("Failed to fetch conversations", error);
       }
     };
     fetchConversations();
@@ -288,15 +301,6 @@ export default function Sidebar({
                   .map((m) => m.user.name || m.user.email?.split("@")[0])
                   .join(", ");
                 const name = conv.name || displayNames || "Empty Group";
-                const isActive =
-                  pathname?.includes(`conversationId=${conv.id}`) ||
-                  (pathname === `/app/${workspaceSlug}/chat` &&
-                    window.location.search.includes(conv.id));
-                // Note: window.location check in render is risky in Next.js/React rehydration.
-                // Better to use useSearchParams if available or check standard link behavior.
-                // Since we are using Link href with query param, pathname won't match query param.
-                // We should use standard Link and let native browser behavior or useSearchParams logic handle active state styling if strictly needed.
-                // For now simplified active check without query param matching in rendering logic to avoid hydration mismatch, or rely on client hook if needed.
 
                 return (
                   <Link
@@ -304,12 +308,7 @@ export default function Sidebar({
                     href={`/app/${workspaceSlug}/chat?conversationId=${conv.id}`}
                     className={cn(
                       "flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 group relative overflow-hidden",
-                      // Simple active check logic is hard with query params in Sidebar without useSearchParams hook usage here.
-                      // Let's just use standard style for now or use useSearchParams if already imported?
-                      // Sidebar imports usePathname but not useSearchParams.
-                      // I will add useSearchParams to imports if I want exact active highlighting.
                       "text-mutedForeground hover:bg-muted hover:text-foreground",
-                      isActive && "bg-primary/5 text-primary font-semibold",
                     )}
                   >
                     <Users size={16} />

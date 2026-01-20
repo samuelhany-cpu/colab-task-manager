@@ -103,16 +103,16 @@ export async function POST(req: Request) {
         position,
         tags: tagIds
           ? {
-            connect: tagIds.map((id) => ({ id })),
-          }
+              connect: tagIds.map((id) => ({ id })),
+            }
           : undefined,
       },
       include: {
         tags: true,
         subtasks: true,
         _count: {
-          select: { subtasks: true, comments: true }
-        }
+          select: { subtasks: true, comments: true },
+        },
       },
     });
 
@@ -246,8 +246,8 @@ export async function PATCH(req: Request) {
               : undefined,
         tags: tagIds
           ? {
-            set: tagIds.map((id) => ({ id })),
-          }
+              set: tagIds.map((id) => ({ id })),
+            }
           : undefined,
       },
       include: {
@@ -257,8 +257,8 @@ export async function PATCH(req: Request) {
           select: { id: true, name: true, email: true, image: true },
         },
         _count: {
-          select: { subtasks: true, comments: true }
-        }
+          select: { subtasks: true, comments: true },
+        },
       },
     });
 

@@ -1,7 +1,7 @@
 /**
  * Test script for notifications system
  * Run with: ts-node scripts/test-notifications.ts
- * 
+ *
  * This script tests:
  * 1. Creating notifications
  * 2. Marking as read

@@ -147,9 +147,7 @@ Use this checklist to manually verify all features in the browser.
 
 -
 -
--
-
----
+- ***
 
 ## Quick Smoke Test (5 minutes)
 

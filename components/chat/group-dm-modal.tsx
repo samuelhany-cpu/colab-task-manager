@@ -67,41 +67,17 @@ export default function GroupDMModal({
       const fetchMembers = async () => {
         setLoading(true);
         try {
-          // We need a route to fetch workspace members. Assuming /api/workspaces/[slug]/members exists?
-          // Or reuse generic users fetch if possible, but we need workspace context.
-          // Let's rely on /api/workspaces?includeMembers=true or similar?
-          // Actually usually we have /api/workspaces/[slug]/settings/members logic.
-          // Let's try fetching via a dedicated valid endpoint.
-          // Day 2 implemented /api/workspaces/[slug/members?
-          // Let's assume we can fetch members. If not, I might need to make an endpoint.
-          // For now, I'll try to fetch from /api/workspaces/[workspaceId]/members if available or similar.
-          // Checking previous turn list_dir... didn't show api structure completely.
-          // Let's assume I can't easily fetch generic members without an endpoint to do so.
-          // However, `Sidebar` fetches `workspaces` which usually has `members` if included.
-          // But that might be heavy.
-          // Let's try fetching /api/users?workspaceId=... if that exists.
-          // Or generic search.
-
-          // Let's implement a quick fetcher here.
           const res = await fetch(`/api/workspaces/${workspaceSlug}/members`);
           if (res.ok) {
-            const data = await res.json();
+            const data: WorkspaceUser[] = await res.json();
             // Filter out self
             const others = data.filter(
               (m: WorkspaceUser) => m.userId !== user?.id,
             );
             setMembers(others);
-          } else {
-            // Fallback: fetch workspace details via slug?
-            // We have workspaceId prop.
-            // Let's check if we have a route for members.
-            // I'll assume we do or I will make one if this fails.
-            // Actually, let's use a safer approach:
-            // /api/workspaces currently returns list.
-            // I'll create a dedicated member fetcher in this file via server action or just use existing.
           }
-        } catch (e) {
-          console.error("Failed to fetch members", e);
+        } catch (error: unknown) {
+          console.error("Failed to fetch members", error);
         } finally {
           setLoading(false);
         }
@@ -110,7 +86,7 @@ export default function GroupDMModal({
       setSelectedUserIds([]);
       setGroupName("");
     }
-  }, [isOpen, workspaceId, user?.id]);
+  }, [isOpen, workspaceId, workspaceSlug, user?.id]);
 
   const toggleUser = (userId: string) => {
     setSelectedUserIds((prev) =>
