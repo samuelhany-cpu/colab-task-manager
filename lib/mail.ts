@@ -1,10 +1,24 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Gmail SMTP Configuration
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER || "samuelhany500@gmail.com",
+    pass: process.env.GMAIL_APP_PASSWORD, // Gmail App Password (not regular password)
+  },
+});
 
 /**
- * Utility for sending emails using Resend API.
- * Fallback to console log if API key is not configured (development).
+ * Utility for sending emails using Gmail SMTP.
+ * Requires GMAIL_APP_PASSWORD environment variable.
+ *
+ * To generate Gmail App Password:
+ * 1. Go to https://myaccount.google.com/security
+ * 2. Enable 2-Step Verification
+ * 3. Go to App Passwords
+ * 4. Create new app password for "Mail"
+ * 5. Add to .env as GMAIL_APP_PASSWORD
  */
 export async function sendEmail({
   to,
@@ -18,9 +32,9 @@ export async function sendEmail({
   console.log(`[MAIL] Sending email to ${to}`);
 
   // Development fallback - log email instead of sending
-  if (!process.env.RESEND_API_KEY) {
+  if (!process.env.GMAIL_APP_PASSWORD) {
     console.warn(
-      "[MAIL] RESEND_API_KEY not configured. Email would be sent to:",
+      "[MAIL] GMAIL_APP_PASSWORD not configured. Email would be sent to:",
       to,
     );
     console.log("[MAIL] Subject:", subject);
@@ -29,15 +43,15 @@ export async function sendEmail({
   }
 
   try {
-    const data = await resend.emails.send({
-      from: "Colab Task Manager <onboarding@resend.dev>", // Update with your verified domain
-      to: [to],
+    const info = await transporter.sendMail({
+      from: `"Colab Task Manager" <${process.env.GMAIL_USER || "samuelhany500@gmail.com"}>`,
+      to,
       subject,
       html,
     });
 
-    console.log("[MAIL] Email sent successfully:", data);
-    return { success: true, info: data };
+    console.log("[MAIL] Email sent successfully:", info.messageId);
+    return { success: true, info };
   } catch (err) {
     console.error("[MAIL_EXCEPTION]", err);
     return { success: false, error: err };
@@ -81,7 +95,7 @@ export function getInvitationHtml(workspaceName: string, inviteLink: string) {
           
           <!-- Call to Action -->
           <div style="text-align: center; margin: 40px 0;">
-            <a href="${inviteLink}" style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: background-color 0.3s;">
+            <a href="${inviteLink}" style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
               Accept Invitation →
             </a>
           </div>
