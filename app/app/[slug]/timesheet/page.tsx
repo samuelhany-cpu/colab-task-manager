@@ -13,6 +13,8 @@ import {
   FileText,
   Clock,
   Play,
+  DollarSign,
+  Ban,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -119,6 +121,29 @@ export default function TimesheetPage({
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     return `${h}h ${m}m`;
+  };
+
+  const handleToggleBillable = async (
+    entryId: string,
+    currentStatus: boolean,
+  ) => {
+    try {
+      const res = await fetch(`/api/time/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isBillable: !currentStatus }),
+      });
+
+      if (res.ok) {
+        setEntries(
+          entries.map((e) =>
+            e.id === entryId ? { ...e, isBillable: !currentStatus } : e,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to toggle billable status:", error);
+    }
   };
 
   const handleDeleteEntry = async (entryId: string) => {
@@ -538,6 +563,9 @@ export default function TimesheetPage({
                     <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
                       Duration
                     </th>
+                    <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest">
+                      Billable
+                    </th>
                     <th className="p-5 text-[10px] font-black text-mutedForeground uppercase tracking-widest text-right">
                       Actions
                     </th>
@@ -576,6 +604,32 @@ export default function TimesheetPage({
                           <Clock size={12} className="text-mutedForeground" />
                           {formatDuration(entry.duration)}
                         </div>
+                      </td>
+                      <td className="p-5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleToggleBillable(entry.id, !!entry.isBillable)
+                          }
+                          className={`flex items-center gap-1.5 rounded-lg font-bold text-[10px] uppercase tracking-wider h-8 px-2 transition-all ${
+                            entry.isBillable
+                              ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                              : "bg-muted text-mutedForeground hover:bg-muted/80"
+                          }`}
+                        >
+                          {entry.isBillable ? (
+                            <>
+                              <DollarSign size={12} />
+                              Billable
+                            </>
+                          ) : (
+                            <>
+                              <Ban size={12} />
+                              Non-Billable
+                            </>
+                          )}
+                        </Button>
                       </td>
                       <td className="p-5 text-right">
                         <div className="flex justify-end gap-1">
