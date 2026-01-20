@@ -2,6 +2,11 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import {
+  rateLimit,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 const projectSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -10,73 +15,89 @@ const projectSchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
 
-  const { searchParams } = new URL(req.url);
-  const workspaceId = searchParams.get("workspaceId");
-  const workspaceSlug = searchParams.get("workspaceSlug");
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!workspaceId && !workspaceSlug) {
-    return NextResponse.json(
-      { error: "Workspace ID or Slug is required" },
-      { status: 400 },
-    );
-  }
+    const { searchParams } = new URL(req.url);
+    const workspaceId = searchParams.get("workspaceId");
+    const workspaceSlug = searchParams.get("workspaceSlug");
 
-  let finalWorkspaceId = workspaceId;
-  if (!finalWorkspaceId && workspaceSlug) {
-    const workspace = await prisma.workspace.findUnique({
-      where: { slug: workspaceSlug },
-    });
-    if (!workspace) {
+    if (!workspaceId && !workspaceSlug) {
       return NextResponse.json(
-        { error: "Workspace not found" },
-        { status: 404 },
+        { error: "Workspace ID or Slug is required" },
+        { status: 400 },
       );
     }
-    finalWorkspaceId = workspace.id;
-  }
 
-  // Check if user is member of the workspace
-  const membership = await prisma.workspaceMember.findFirst({
-    where: {
-      workspaceId: finalWorkspaceId as string,
-      userId: user.id,
-    },
-  });
+    let finalWorkspaceId = workspaceId;
+    if (!finalWorkspaceId && workspaceSlug) {
+      const workspace = await prisma.workspace.findUnique({
+        where: { slug: workspaceSlug },
+      });
+      if (!workspace) {
+        return NextResponse.json(
+          { error: "Workspace not found" },
+          { status: 404 },
+        );
+      }
+      finalWorkspaceId = workspace.id;
+    }
 
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+    // Check if user is member of the workspace
+    const membership = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: finalWorkspaceId as string,
+        userId: user.id,
+      },
+    });
 
-  const projects = await prisma.project.findMany({
-    where: { workspaceId: finalWorkspaceId as string },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: { id: true, name: true, email: true, image: true },
+    if (!membership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const projects = await prisma.project.findMany({
+      where: { workspaceId: finalWorkspaceId as string },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, image: true },
+            },
           },
         },
+        _count: {
+          select: { tasks: true },
+        },
       },
-      _count: {
-        select: { tasks: true },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json(projects);
+    return NextResponse.json(projects);
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json();
     const { name, description, workspaceId } = projectSchema.parse(body);
 
@@ -108,12 +129,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }

@@ -1,9 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  rateLimitSearch,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 export async function GET(req: Request) {
   try {
+    // Apply search rate limiting (20 req/min)
+    const rateLimitResult = await rateLimitSearch(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q");
     const workspaceSlug = searchParams.get("workspaceSlug");
@@ -131,7 +142,6 @@ export async function GET(req: Request) {
 
     return NextResponse.json(results);
   } catch (error) {
-    console.error("[SEARCH_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return handleApiError(error);
   }
 }

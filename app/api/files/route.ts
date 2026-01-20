@@ -2,48 +2,70 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { uploadFile, getDownloadUrl } from "@/lib/storage";
+import {
+  rateLimit,
+  rateLimitUpload,
+  createRateLimitResponse,
+} from "@/lib/middleware/rate-limit";
+import { handleApiError } from "@/lib/api/error-handler";
 
 export async function GET(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get("projectId");
-  const folderId = searchParams.get("folderId");
-
-  if (projectId) {
-    const where: Record<string, string | null> = { projectId };
-    if (folderId) {
-      where.folderId = folderId === "root" ? null : folderId;
+  try {
+    // Apply default rate limiting
+    const rateLimitResult = await rateLimit(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
     }
 
-    const files = await prisma.file.findMany({
-      where,
-      include: { uploadedBy: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Generate signed URLs for each file
-    const filesWithUrls = await Promise.all(
-      files.map(async (file) => ({
-        ...file,
-        url: await getDownloadUrl(file.key),
-      })),
-    );
+    const { searchParams } = new URL(req.url);
+    const projectId = searchParams.get("projectId");
+    const folderId = searchParams.get("folderId");
 
-    return NextResponse.json(filesWithUrls);
+    if (projectId) {
+      const where: Record<string, string | null> = { projectId };
+      if (folderId) {
+        where.folderId = folderId === "root" ? null : folderId;
+      }
+
+      const files = await prisma.file.findMany({
+        where,
+        include: { uploadedBy: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      });
+
+      // Generate signed URLs for each file
+      const filesWithUrls = await Promise.all(
+        files.map(async (file) => ({
+          ...file,
+          url: await getDownloadUrl(file.key),
+        })),
+      );
+
+      return NextResponse.json(filesWithUrls);
+    }
+
+    return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
+  } catch (error) {
+    return handleApiError(error);
   }
-
-  return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
 }
 
 export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
   try {
+    // Apply upload rate limiting (10 uploads/min)
+    const rateLimitResult = await rateLimitUpload(req);
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(rateLimitResult);
+    }
+
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const projectId = formData.get("projectId") as string;
@@ -82,10 +104,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(fileRecord, { status: 201 });
   } catch (error) {
-    console.error("Upload error:", error);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 },
-    );
+    return handleApiError(error);
   }
 }
