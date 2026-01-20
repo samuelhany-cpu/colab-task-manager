@@ -118,11 +118,26 @@ model Project {
   files     File[]
   folders   Folder[]
   messages  Message[]
+  milestones Milestone[]
 }
 
 enum ProjectStatus {
   ACTIVE
   ARCHIVED
+}
+
+model Milestone {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  dueDate     DateTime
+  completed   Boolean  @default(false)
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
 }
 
 model ProjectMember {

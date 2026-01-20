@@ -4,6 +4,8 @@ import { use, useState, useEffect } from "react";
 import KanbanBoard from "@/components/board/kanban-board";
 import ProjectMembers from "@/components/project/project-members";
 import ProjectCalendar from "@/components/calendar/project-calendar";
+import ProjectAnalytics from "@/components/project/project-analytics";
+import ProjectMilestones from "@/components/project/project-milestones";
 import {
   Users,
   LayoutGrid,
@@ -12,6 +14,8 @@ import {
   Settings,
   Star,
   Calendar,
+  BarChart3,
+  Target,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -28,9 +32,9 @@ export default function ProjectPage({
   params: Promise<{ slug: string; projectId: string }>;
 }) {
   const { slug, projectId } = use(params);
-  const [activeTab, setActiveTab] = useState<"board" | "members" | "calendar">(
-    "board",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "board" | "members" | "calendar" | "analytics" | "milestones"
+  >("board");
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -160,6 +164,38 @@ export default function ProjectPage({
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("analytics")}
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "analytics"
+                  ? "text-primary"
+                  : "text-mutedForeground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 size={14} />
+                Analytics
+              </div>
+              {activeTab === "analytics" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("milestones")}
+              className={`pb-4 px-1 text-sm font-black uppercase tracking-widest transition-all relative ${
+                activeTab === "milestones"
+                  ? "text-primary"
+                  : "text-mutedForeground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Target size={14} />
+                Milestones
+              </div>
+              {activeTab === "milestones" && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full animate-in fade-in slide-in-from-bottom-1" />
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -171,6 +207,10 @@ export default function ProjectPage({
               <KanbanBoard projectId={projectId} workspaceSlug={slug} />
             ) : activeTab === "calendar" ? (
               <ProjectCalendar projectId={projectId} workspaceSlug={slug} />
+            ) : activeTab === "analytics" ? (
+              <ProjectAnalytics projectId={projectId} />
+            ) : activeTab === "milestones" ? (
+              <ProjectMilestones projectId={projectId} />
             ) : (
               <ProjectMembers projectId={projectId} />
             )}

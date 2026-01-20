@@ -26,7 +26,6 @@ export default function ChatBox({
         projectId={projectId}
         receiverId={receiverId}
         conversationId={conversationId}
-        parentId={activeThread ? activeThread.id : undefined}
         className={cn("flex-1", activeThread ? "border-r border-border" : "")}
         onThreadSelect={setActiveThread}
       />
