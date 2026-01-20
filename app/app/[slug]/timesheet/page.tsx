@@ -149,15 +149,74 @@ export default function TimesheetPage({
     if (entries.length === 0) return;
 
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Title
-    doc.setFontSize(18);
-    doc.text(`Timesheet Report - ${new Date().toLocaleDateString()}`, 14, 22);
+    // Calculate billable stats
+    const billableEntries = entries.filter((e) => e.isBillable);
+    const nonBillableEntries = entries.filter((e) => !e.isBillable);
+    const billableTime = billableEntries.reduce(
+      (acc, curr) => acc + curr.duration,
+      0,
+    );
+    const nonBillableTime = nonBillableEntries.reduce(
+      (acc, curr) => acc + curr.duration,
+      0,
+    );
 
-    // Summary
-    doc.setFontSize(11);
-    doc.text(`Total Time: ${formatDuration(totalTime)}`, 14, 32);
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(59, 130, 246);
+    doc.text("Timesheet Report", pageWidth / 2, 20, { align: "center" });
 
+    // Date range
+    doc.setFontSize(10);
+    doc.setTextColor(150, 150, 150);
+    const reportDate = new Date().toLocaleDateString();
+    doc.text(reportDate, pageWidth / 2, 28, { align: "center" });
+
+    // Summary box
+    doc.setFillColor(249, 250, 251);
+    doc.rect(15, 35, pageWidth - 30, 30, "F");
+
+    doc.setFontSize(9);
+    doc.setTextColor(75, 85, 99);
+
+    const summaryY = 43;
+    const col1X = 25;
+    const col2X = 85;
+    const col3X = 145;
+
+    // Total Hours
+    doc.setFont("helvetica", "bold");
+    doc.text("Total Hours:", col1X, summaryY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(14);
+    doc.text(formatDuration(totalTime), col1X, summaryY + 8);
+
+    // Billable Hours
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Billable:", col2X, summaryY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(14);
+    doc.setTextColor(16, 185, 129);
+    doc.text(formatDuration(billableTime), col2X, summaryY + 8);
+
+    // Non-Billable Hours
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(75, 85, 99);
+    doc.text("Non-Billable:", col3X, summaryY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(14);
+    doc.setTextColor(239, 68, 68);
+    doc.text(formatDuration(nonBillableTime), col3X, summaryY + 8);
+
+    // Reset colors
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+
+    // Table data
     const tableColumn = [
       "User",
       "Date",
@@ -173,14 +232,47 @@ export default function TimesheetPage({
       entry.task.project.name,
       entry.task.title,
       formatDuration(entry.duration),
-      entry.isBillable ? "Yes" : "No",
+      entry.isBillable ? "✓ Yes" : "✗ No",
       entry.note || "",
     ]);
 
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 40,
+      startY: 72,
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [59, 130, 246],
+        textColor: 255,
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: [249, 250, 251],
+      },
+      columnStyles: {
+        3: { cellWidth: 40 }, // Task name - wider
+        5: { cellWidth: 18, halign: "center" }, // Billable - centered
+      },
+      didDrawPage: (data) => {
+        // Footer
+        const pageCount = doc.getNumberOfPages();
+        const pageNumber = doc.getCurrentPageInfo().pageNumber;
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(
+          `Page ${pageNumber} of ${pageCount}`,
+          pageWidth / 2,
+          pageHeight - 10,
+          {
+            align: "center",
+          },
+        );
+      },
     });
 
     doc.save(`timesheet-report-${new Date().toISOString().split("T")[0]}.pdf`);
