@@ -624,11 +624,11 @@ After deployment, document:
 
 ## SIGN-OFF
 
-**Prepared by:** ****\*\*****\_****\*\***** Date: **\_\_\_**  
-**Reviewed by:** ****\*\*****\_****\*\***** Date: **\_\_\_**  
-**Approved by:** ****\*\*****\_****\*\***** Date: **\_\_\_**
+**Prepared by:** \***\*\*\*\*\***\_\***\*\*\*\*\*** Date: **\_\_\_**  
+**Reviewed by:** \***\*\*\*\*\***\_\***\*\*\*\*\*** Date: **\_\_\_**  
+**Approved by:** \***\*\*\*\*\***\_\***\*\*\*\*\*** Date: **\_\_\_**
 
-**Deployment Executed by:** ****\*\*****\_****\*\***** Date: **\_\_\_**  
+**Deployment Executed by:** \***\*\*\*\*\***\_\***\*\*\*\*\*** Date: **\_\_\_**  
 **Deployment Status:** [ ] Success [ ] Partial [ ] Rolled Back
 
 **Final Notes:**
