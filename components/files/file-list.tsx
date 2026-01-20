@@ -13,6 +13,7 @@ import {
   Archive,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import FilePreview from "./file-preview";
 
 interface FileEntry {
   id: string;
@@ -28,6 +29,8 @@ export default function FileList({ projectId }: { projectId: string }) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     const fetchFiles = async () => {
@@ -79,6 +82,22 @@ export default function FileList({ projectId }: { projectId: string }) {
     const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const handleNext = () => {
+    if (!previewFile) return;
+    const currentIndex = files.findIndex((f) => f.id === previewFile.id);
+    if (currentIndex !== -1 && currentIndex < files.length - 1) {
+      setPreviewFile(files[currentIndex + 1]);
+    }
+  };
+
+  const handlePrev = () => {
+    if (!previewFile) return;
+    const currentIndex = files.findIndex((f) => f.id === previewFile.id);
+    if (currentIndex > 0) {
+      setPreviewFile(files[currentIndex - 1]);
+    }
   };
 
   const getFileIcon = (mime: string) => {
@@ -143,7 +162,11 @@ export default function FileList({ projectId }: { projectId: string }) {
         {files.map((file) => (
           <div
             key={file.id}
-            className="group flex flex-col p-5 bg-card border border-border rounded-2xl shadow-soft transition-all hover:translate-y-[-4px] hover:shadow-xl hover:border-primary/20"
+            onClick={() => {
+              setPreviewFile(file);
+              setShowPreview(true);
+            }}
+            className="group flex flex-col p-5 bg-card border border-border rounded-2xl shadow-soft transition-all hover:translate-y-[-4px] hover:shadow-xl hover:border-primary/20 cursor-pointer"
           >
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
@@ -174,6 +197,7 @@ export default function FileList({ projectId }: { projectId: string }) {
               <a
                 href={file.url}
                 download={file.name}
+                onClick={(e) => e.stopPropagation()}
                 className="p-2.5 rounded-xl bg-muted text-mutedForeground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
                 title="Download"
               >
@@ -197,6 +221,37 @@ export default function FileList({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+
+      <FilePreview
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        file={
+          previewFile
+            ? {
+                id: previewFile.id,
+                key: "", // Key is used for versioning but not always needed for preview
+                originalName: previewFile.name,
+                mimeType: previewFile.mimeType,
+                url: previewFile.url,
+                size: previewFile.size,
+              }
+            : null
+        }
+        onNext={
+          previewFile &&
+          files.findIndex((f) => f.id === previewFile.id) < files.length - 1
+            ? handleNext
+            : undefined
+        }
+        onPrev={
+          previewFile && files.findIndex((f) => f.id === previewFile.id) > 0
+            ? handlePrev
+            : undefined
+        }
+        onRefresh={() => {
+          // Re-fetch logic if needed
+        }}
+      />
     </div>
   );
 }

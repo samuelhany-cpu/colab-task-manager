@@ -15,7 +15,14 @@ import {
   Clock,
   UploadCloud,
   Loader2,
+  Video as VideoIcon,
+  Music as MusicIcon,
 } from "lucide-react";
+import {
+  TransformWrapper,
+  TransformComponent,
+  useControls,
+} from "react-zoom-pan-pinch";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +64,6 @@ export default function FilePreview({
   onPrev,
   onRefresh,
 }: FilePreviewProps) {
-  const [scale, setScale] = useState(1);
   const [showHistory, setShowHistory] = useState(false);
   const [versions, setVersions] = useState<FileVersion[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
@@ -81,7 +87,6 @@ export default function FilePreview({
   }, [file?.id]);
 
   useEffect(() => {
-    setScale(1); // Reset zoom when file changes
     if (showHistory && file?.id) {
       fetchVersions();
     }
@@ -151,11 +156,37 @@ export default function FilePreview({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const handleZoomIn = () =>
-    setScale((prev: number) => Math.min(prev + 0.25, 3));
-  const handleZoomOut = () =>
-    setScale((prev: number) => Math.max(prev - 0.25, 0.5));
-  const handleResetZoom = () => setScale(1);
+  const ZoomControls = () => {
+    const { zoomIn, zoomOut, resetTransform } = useControls();
+    return (
+      <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => zoomOut()}
+          className="h-8 w-8 text-white/60 hover:text-white"
+        >
+          <ZoomOut size={16} />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => zoomIn()}
+          className="h-8 w-8 text-white/60 hover:text-white"
+        >
+          <ZoomIn size={16} />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => resetTransform()}
+          className="h-8 w-8 text-white/60 hover:text-white"
+        >
+          <RotateCcw size={16} />
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[2000] bg-black/90 backdrop-blur-md flex flex-col animate-in fade-in duration-300">
@@ -167,6 +198,10 @@ export default function FilePreview({
               <FileImage size={20} />
             ) : isPdf ? (
               <FileText size={20} />
+            ) : isVideo ? (
+              <VideoIcon size={20} />
+            ) : isAudio ? (
+              <MusicIcon size={20} />
             ) : (
               <FileIcon size={20} />
             )}
@@ -182,37 +217,7 @@ export default function FilePreview({
         </div>
 
         <div className="flex items-center gap-2">
-          {isImage && (
-            <div className="flex items-center gap-1 mr-4 bg-white/5 rounded-xl p-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleZoomOut}
-                className="h-8 w-8 text-white/60 hover:text-white"
-              >
-                <ZoomOut size={16} />
-              </Button>
-              <span className="text-[10px] font-black text-white/40 min-w-[40px] text-center">
-                {Math.round(scale * 100)}%
-              </span>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleZoomIn}
-                className="h-8 w-8 text-white/60 hover:text-white"
-              >
-                <ZoomIn size={16} />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleResetZoom}
-                className="h-8 w-8 text-white/60 hover:text-white"
-              >
-                <RotateCcw size={16} />
-              </Button>
-            </div>
-          )}
+          {/* Zoom controls will be rendered inside TransformWrapper if isImage is true */}
           <Button
             variant="ghost"
             size="icon"
@@ -255,78 +260,110 @@ export default function FilePreview({
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden lg:flex-row flex-col">
         {/* Preview Content */}
         <main className="flex-1 overflow-hidden relative flex items-center justify-center p-4 sm:p-8">
           {/* Navigation Controls */}
-          {onPrev && (
-            <button
-              onClick={onPrev}
-              className="absolute left-4 z-10 w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
-            >
-              <ChevronLeft size={32} />
-            </button>
-          )}
-          {onNext && (
-            <button
-              onClick={onNext}
-              className="absolute right-4 z-10 w-12 h-12 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
-            >
-              <ChevronRight size={32} />
-            </button>
-          )}
-
-          <div className="w-full h-full flex items-center justify-center overflow-auto custom-scrollbar">
-            {isImage ? (
-              <div
-                className="transition-transform duration-200 ease-out"
-                style={{ transform: `scale(${scale})` }}
+          <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between z-[100] pointer-events-none">
+            {onPrev ? (
+              <button
+                onClick={onPrev}
+                className="pointer-events-auto w-12 h-12 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:scale-110 transition-all shadow-xl"
               >
-                <img
+                <ChevronLeft size={32} />
+              </button>
+            ) : (
+              <div />
+            )}
+            {onNext ? (
+              <button
+                onClick={onNext}
+                className="pointer-events-auto w-12 h-12 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white hover:scale-110 transition-all shadow-xl"
+              >
+                <ChevronRight size={32} />
+              </button>
+            ) : (
+              <div />
+            )}
+          </div>
+
+          <div className="w-full h-full flex items-center justify-center overflow-hidden">
+            {isImage ? (
+              <TransformWrapper
+                initialScale={1}
+                minScale={0.5}
+                maxScale={8}
+                centerOnInit
+              >
+                <div className="absolute top-4 right-4 z-[100] sm:top-24 sm:right-10">
+                  <ZoomControls />
+                </div>
+                <TransformComponent
+                  wrapperClass="!w-full !h-full"
+                  contentClass="!w-full !h-full flex items-center justify-center"
+                >
+                  <img
+                    src={file.url}
+                    alt={file.originalName}
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-500 cursor-zoom-in"
+                  />
+                </TransformComponent>
+              </TransformWrapper>
+            ) : isVideo ? (
+              <div className="w-full max-w-5xl aspect-video bg-black/40 rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/5 p-2">
+                <video
                   src={file.url}
-                  alt={file.originalName}
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-500"
+                  controls
+                  className="w-full h-full rounded-[2rem] object-contain"
+                  autoPlay
                 />
               </div>
-            ) : isVideo ? (
-              <video
-                src={file.url}
-                controls
-                className="max-w-full max-h-full rounded-lg shadow-2xl"
-                autoPlay
-              />
             ) : isAudio ? (
-              <div className="bg-white/5 p-12 rounded-[3rem] w-full max-w-xl text-center space-y-8">
-                <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center text-primary mx-auto animate-pulse">
-                  <FileIcon size={48} />
+              <div className="bg-white/5 backdrop-blur-xl p-12 rounded-[4rem] w-full max-w-xl text-center space-y-8 border border-white/10 shadow-2xl animate-in slide-in-from-bottom-8">
+                <div className="w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center text-primary mx-auto shadow-inner relative">
+                  <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-ping opacity-20" />
+                  <MusicIcon size={64} />
                 </div>
-                <h2 className="text-xl font-black text-white">
-                  {file.originalName}
-                </h2>
-                <audio src={file.url} controls className="w-full" autoPlay />
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-black text-white">
+                    {file.originalName}
+                  </h2>
+                  <p className="text-xs font-bold text-white/40 uppercase tracking-widest">
+                    Audio track • {formatSize(file.size)}
+                  </p>
+                </div>
+                <audio
+                  src={file.url}
+                  controls
+                  className="w-full h-12 rounded-full appearance-none shadow-xl"
+                  autoPlay
+                />
               </div>
             ) : isPdf ? (
               <iframe
                 src={`${file.url}#toolbar=0`}
-                className="w-full h-full max-w-5xl bg-white rounded-lg shadow-2xl animate-in fade-in duration-500"
+                className="w-full h-full max-w-5xl bg-white rounded-lg shadow-2xl animate-in fade-in duration-500 border-none"
                 title={file.originalName}
               />
             ) : (
-              <div className="flex flex-col items-center gap-6 text-center">
-                <div className="w-32 h-32 rounded-[2rem] bg-white/5 flex items-center justify-center text-white/20 shadow-inner">
-                  <FileIcon size={64} />
+              <div className="flex flex-col items-center gap-8 text-center animate-in zoom-in-95">
+                <div className="w-40 h-40 rounded-[3rem] bg-white/5 border border-white/10 flex items-center justify-center text-white/10 shadow-inner group">
+                  <FileIcon
+                    size={80}
+                    className="group-hover:scale-110 transition-transform duration-500"
+                  />
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-xl font-black text-white">
-                    No preview available
+                <div className="space-y-3">
+                  <h2 className="text-3xl font-black text-white">
+                    No Preview Available
                   </h2>
-                  <p className="text-white/40 max-w-xs mx-auto text-sm font-medium">
-                    This file type cannot be previewed directly in the browser.
-                    Please download it to view the content.
+                  <p className="text-white/40 max-w-xs mx-auto text-sm font-medium leading-relaxed">
+                    This file type ({file.mimeType}) cannot be previewed
+                    directly. Download it to view on your device.
                   </p>
                 </div>
                 <Button
-                  className="mt-4 bg-white text-black hover:bg-white/90 font-black rounded-2xl px-8 h-12 shadow-xl"
+                  className="mt-4 bg-primary text-white hover:bg-primary/90 font-black rounded-2xl px-12 h-14 shadow-2xl shadow-primary/20 text-sm uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
                   asChild
                 >
                   <a href={file.url} download={file.originalName}>
