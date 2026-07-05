@@ -38,6 +38,50 @@ model User {
   messageReads      MessageRead[]
   conversationMemberships ConversationMember[]
   invitationsSent     Invitation[]      @relation("SentInvitations")
+  
+  // Phase 3: Security & Integrations
+  twoFactorEnabled    Boolean   @default(false)
+  twoFactorSecret     String?
+  recoveryCodes       String?   // JSON stringified array
+  integrations        Integration[]
+  auditLogs           AuditLog[]
+}
+
+model Integration {
+  id          String   @id @default(cuid())
+  userId      String
+  type        IntegrationType
+  accessToken String
+  refreshToken String?
+  externalId  String?  // e.g. GitHub User ID
+  config      Json?    // Specific settings (repo filters, etc)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum IntegrationType {
+  GITHUB
+  JIRA
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // e.g. "PROJECT_DELETED", "2FA_ENABLED"
+  resourceId  String?  // ID of the affected resource
+  resourceType String? // e.g. "PROJECT", "USER"
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Conversation {
@@ -119,6 +163,10 @@ model Project {
   folders   Folder[]
   messages  Message[]
   milestones Milestone[]
+
+  // External Integration Mapping
+  githubRepo      String?    // e.g. "owner/repo"
+  jiraProjectKey  String?    // e.g. "PROJ"
 }
 
 enum ProjectStatus {
@@ -178,6 +226,10 @@ model Task {
   timers      Timer[]
   files       File[]
   tags        Tag[]
+
+  // External Integration Mapping
+  githubIssueNumber Int?
+  jiraIssueKey      String?
 
   @@index([projectId])
   @@index([assigneeId])

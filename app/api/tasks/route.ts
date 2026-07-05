@@ -8,6 +8,9 @@ import {
   createRateLimitResponse,
 } from "@/lib/middleware/rate-limit";
 import { handleApiError } from "@/lib/api/error-handler";
+import { syncTaskToGitHub } from "@/lib/integrations/github";
+import { logAction } from "@/lib/audit-logger";
+import { createClient } from "@/lib/supabase/server";
 
 const taskSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -145,14 +148,37 @@ export async function POST(req: Request) {
       },
     });
 
-    // Broadcast via Supabase Realtime
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
-    await supabase.channel(`project:${data.projectId}`).send({
-      type: "broadcast",
-      event: "task-updated",
-      payload: { projectId: data.projectId, taskId: task.id, type: "CREATED" },
+    // Trigger GitHub Sync (non-blocking background operation)
+    syncTaskToGitHub(task.id, user.id).catch((error) => {
+      console.error("[TASK_CREATE] GitHub sync failed:", error);
     });
+
+    // Audit Log (non-blocking background operation)
+    logAction({
+      userId: user.id,
+      action: "TASK_CREATED",
+      resourceId: task.id,
+      resourceType: "TASK",
+      metadata: { title: task.title, projectId: task.projectId },
+    }).catch((error) => {
+      console.error("[TASK_CREATE] Audit log failed:", error);
+    });
+
+    // Broadcast via Supabase Realtime (non-blocking background operation)
+    try {
+      const supabase = await createClient();
+      await supabase.channel(`project:${data.projectId}`).send({
+        type: "broadcast",
+        event: "task-updated",
+        payload: {
+          projectId: data.projectId,
+          taskId: task.id,
+          type: "CREATED",
+        },
+      });
+    } catch (broadcastError) {
+      console.error("[TASK_CREATE] Realtime broadcast failed:", broadcastError);
+    }
 
     // Send notification if task has assignee
     if (data.assigneeId && data.assigneeId !== user.id) {

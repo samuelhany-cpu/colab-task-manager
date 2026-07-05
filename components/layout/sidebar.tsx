@@ -14,6 +14,7 @@ import {
   Compass,
   MessageSquare,
   Settings,
+  Shield,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import NotificationDropdown from "@/components/notifications/notification-dropdown";
@@ -117,6 +118,16 @@ export default function Sidebar({
     { name: "Chat", icon: MessageSquare, href: `/app/${workspaceSlug}/chat` },
     { name: "Timesheet", icon: Clock, href: `/app/${workspaceSlug}/timesheet` },
     { name: "All Files", icon: FileText, href: `/app/${workspaceSlug}/files` },
+    {
+      name: "Security",
+      icon: Shield,
+      href: `/app/${workspaceSlug}/settings/security`,
+    },
+    {
+      name: "Settings",
+      icon: Settings,
+      href: `/app/${workspaceSlug}/settings`,
+    },
   ];
 
   return (
@@ -359,12 +370,17 @@ export default function Sidebar({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button
-                  className="flex-1 h-8 rounded-lg flex items-center justify-center text-mutedForeground bg-muted border border-border hover:bg-muted/80 hover:text-foreground transition-all"
-                  title="Settings"
+                <Link
+                  href={`/app/${workspaceSlug}/settings`}
+                  className="flex-1 h-8"
                 >
-                  <Settings size={16} />
-                </button>
+                  <button
+                    className="w-full h-full rounded-lg flex items-center justify-center text-mutedForeground bg-muted border border-border hover:bg-muted/80 hover:text-foreground transition-all"
+                    title="Settings"
+                  >
+                    <Settings size={16} />
+                  </button>
+                </Link>
                 <NotificationDropdown />
               </div>
             </div>

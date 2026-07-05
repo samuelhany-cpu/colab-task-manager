@@ -102,13 +102,15 @@ export default function ProjectPage({
             </div>
 
             <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="icon"
-                className="rounded-xl h-11 w-11 shadow-sm border-border/50"
-              >
-                <Settings size={20} />
-              </Button>
+              <Link href={`/app/${slug}/projects/${projectId}/integrations`}>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="rounded-xl h-11 w-11 shadow-sm border-border/50"
+                >
+                  <Settings size={20} />
+                </Button>
+              </Link>
               <Button className="rounded-xl h-11 px-6 font-bold shadow-lg shadow-primary/20">
                 Share Project
               </Button>
