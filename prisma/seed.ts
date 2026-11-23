@@ -10,7 +10,19 @@ import bcrypt from "bcrypt";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("Start seeding...");
+  // This script deletes and recreates demo data. Never run against real user data.
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
+    throw new Error(
+      "Demo seed is destructive. Set ALLOW_DESTRUCTIVE_SEED=true only for a disposable development database.",
+    );
+  }
+
+  const demoPassword = process.env.DEMO_SEED_PASSWORD;
+  if (!demoPassword || demoPassword.length < 12) {
+    throw new Error("Set DEMO_SEED_PASSWORD to a unique 12+ character demo-only password.");
+  }
+
+  console.log("Start seeding disposable development database...");
 
   // 1. Cleanup
   await prisma.notification.deleteMany();
@@ -27,14 +39,14 @@ async function main() {
   await prisma.workspace.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await bcrypt.hash("password123", 10);
+  const passwordHash = await bcrypt.hash(demoPassword, 10);
 
   // 2. Create Users
   const users = await Promise.all([
     prisma.user.create({
       data: {
-        name: "Samuel Ehab",
-        email: "samuelhany500@gmail.com",
+        name: "Demo Owner",
+        email: "demo.owner@example.test",
         passwordHash,
         image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Samuel",
       },
