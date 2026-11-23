@@ -1,240 +1,80 @@
-# 🚀 Colab Task Manager
+# Colab Task Manager
 
-A modern, real-time collaborative task management platform built with Next.js 16, featuring workspace organization, kanban boards, time tracking, file sharing, and team chat.
+A collaborative workspace and task management application built with **Next.js**, **TypeScript**, **Prisma**, and **PostgreSQL**.
 
-![Next.js](https://img.shields.io/badge/Next.js-16.1-black?style=flat-square&logo=next.js)
-![React](https://img.shields.io/badge/React-19.2-blue?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)
-![Prisma](https://img.shields.io/badge/Prisma-6.1-teal?style=flat-square&logo=prisma)
-![Socket.io](https://img.shields.io/badge/Socket.io-4.8-black?style=flat-square&logo=socket.io)
+> **Project status:** Portfolio/prototype code. Review and harden authentication, authorization, and real-time messaging before exposing it to public users. In particular, the current [Socket.IO server](server.ts) accepts client-supplied room identifiers and events without a verified per-connection identity/room membership check; it is **not production-ready**.
 
-## ✨ Features
+## Engineering overview
 
-### 🏢 Workspace Management
+| Area | Source | Why it matters |
+| --- | --- | --- |
+| Workspace/project/task data model | [Prisma schema](prisma/schema.prisma) | Relational modeling, memberships and task lifecycle |
+| API routes | [app/api](app/api) | Full-stack server-side request handling |
+| Supabase session integration | [lib/supabase](lib/supabase) | Session utilities and middleware integration |
+| Real-time experiment | [server.ts](server.ts), [socket client](lib/socket-client.ts) | Socket.IO room and event delivery (requires authorization hardening) |
+| Shared UI | [components](components) | Kanban, project, chat and related user interfaces |
+| Deployment configuration | [render.yaml](render.yaml) | Example deployment descriptor; **not** proof that all features are securely deployable |
 
-- **Multi-workspace support** - Organize teams into separate workspaces
-- **Role-based access control** - Owner and Member roles with different permissions
-- **Workspace dashboard** - Real-time stats and activity feeds
+### Features represented in the repository
 
-### 📋 Project & Task Management
+- Workspace, project and task management, including Kanban-style UI
+- Membership and role data in PostgreSQL
+- Comments, collaboration and notification code paths
+- Time tracking and file storage integration modules
+- Socket.IO-based real-time messaging prototype
 
-- **Kanban Board** - Drag-and-drop interface with TODO, IN PROGRESS, and DONE columns
-- **Task Details** - Titles, descriptions, priorities (Low, Medium, High, Urgent), due dates
-- **Task Assignment** - Assign tasks to team members
-- **Real-time Updates** - Instant synchronization across all connected clients
-- **Comments & Activity** - Collaborative discussions on tasks
+Feature descriptions refer to repository code, not independently verified production behavior.
 
-### ⏱️ Time Tracking
+## Tech stack
 
-- **Time Entries** - Log hours worked on tasks
-- **Active Timers** - Start/stop timers with automatic duration calculation
-- **Weekly View** - Visualize time entries in a weekly timesheet
+- **Application:** Next.js, React, TypeScript
+- **Backend/data:** Next.js API routes, Prisma, PostgreSQL
+- **Auth/session utilities:** Supabase (see `lib/supabase`)
+- **Real-time:** Socket.IO (prototype; authorization work required)
+- **Object storage:** S3-compatible storage via AWS SDK / R2 integration
 
-### 📁 File Management
+## Local setup
 
-- **File Upload** - Attach files to projects and tasks
-- **Cloudflare R2 Storage** - Scalable object storage integration
-- **File Preview** - View and download uploaded files
-- **File Organization** - Browse files by project
-
-### 💬 Real-time Communication
-
-- **Project Chat** - Channel-based messaging per project
-- **Direct Messages** - Private conversations between team members
-- **Real-time Notifications** - Instant alerts for assignments, mentions, and updates
-
-### 🔐 Authentication & Security
-
-- **NextAuth.js** - Secure authentication with email/password
-- **Protected Routes** - Middleware-based route protection
-- **Session Management** - Secure user sessions
-
-## 🛠️ Tech Stack
-
-### Frontend
-
-- **Next.js 16** - React framework with App Router
-- **React 19** - UI library with Server Components
-- **TypeScript** - Type-safe development
-- **Lucide React** - Beautiful icon library
-- **CSS Modules** - Scoped styling
-
-### Backend
-
-- **Next.js API Routes** - RESTful API endpoints
-- **Prisma ORM** - Type-safe database access
-- **PostgreSQL** - Relational database
-- **NextAuth.js** - Authentication solution
-
-### Real-time
-
-- **Socket.io** - WebSocket connections for real-time features
-- **Custom Socket Server** - Node.js HTTP server with Socket.io integration
-
-### Storage
-
-- **Cloudflare R2** - S3-compatible object storage for files
-- **AWS SDK v3** - S3 client for R2 integration
-
-### Dev Tools
-
-- **ESLint** - Code linting
-- **Prettier** - Code formatting
-- **Husky** - Git hooks
-- **lint-staged** - Pre-commit linting
-
-## 📦 Installation
-
-### Prerequisites
-
-- Node.js 20+
-- PostgreSQL database
-- Cloudflare R2 account (optional, for file storage)
-
-### 1. Clone the repository
+Requirements: Node.js 20+, PostgreSQL, npm.
 
 ```bash
-git clone https://github.com/yourusername/colab-task-manager.git
+git clone https://github.com/samuelhany-cpu/colab-task-manager.git
 cd colab-task-manager
+npm ci
 ```
 
-### 2. Install dependencies
+1. Copy `.env.example` to `.env` and fill in **your own local** database, Supabase, and optional storage settings. Never commit secrets.
+2. Configure `DATABASE_URL` and `DIRECT_URL` for Prisma as required by [schema.prisma](prisma/schema.prisma).
+3. Generate the Prisma client and apply the project's migrations to a **disposable development database**:
 
 ```bash
-npm install
-```
-
-### 3. Set up environment variables
-
-Create a `.env` file in the root directory:
-
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/colab_tasks?schema=public"
-
-# NextAuth
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key-here"
-
-# Cloudflare R2 (Optional)
-R2_ACCOUNT_ID="your-account-id"
-R2_ACCESS_KEY_ID="your-access-key"
-R2_SECRET_ACCESS_KEY="your-secret-key"
-R2_BUCKET_NAME="your-bucket-name"
-
-# Socket.io
-NEXT_PUBLIC_SOCKET_URL="http://localhost:3000"
-```
-
-### 4. Set up the database
-
-```bash
-# Generate Prisma Client
 npx prisma generate
-
-# Run migrations
 npx prisma migrate dev
-
-# Seed the database (optional)
-npx prisma db seed
+npm run dev
 ```
 
-### 5. Run the development server
+Open `http://localhost:3000`. The `npm run dev` command starts Next.js; it does **not** start the custom Socket.IO server. The code in [server.ts](server.ts) is a separate prototype and needs an authorization review before being exposed to untrusted clients. Do not assume the example Render configuration runs that custom server.
+
+### Demo seed — destructive, opt-in only
+
+[The seed script](prisma/seed.ts) uses `deleteMany()` across multiple tables before recreating demo workspaces, users and tasks. **Never run it on a database containing valuable data.** It now refuses to run unless explicitly enabled and requires a unique demo-only password supplied at runtime.
+
+For a disposable local database, set `ALLOW_DESTRUCTIVE_SEED=true` and `DEMO_SEED_PASSWORD` (12+ characters), then run:
 
 ```bash
-npm run dev:socket
+npm run db:seed:demo
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+On Windows PowerShell, set the two environment variables in the shell session before running that command. Demo accounts are defined in `prisma/seed.ts`; don't reuse their credentials for real services.
 
-## 🗂️ Project Structure
+## Before a production deployment
 
-```
-colab-task-manager/
-├── app/
-│   ├── (auth)/              # Authentication pages
-│   ├── api/                 # API routes
-│   ├── app/[slug]/          # Workspace pages
-│   └── auth/                # Auth UI
-├── components/
-│   ├── board/               # Kanban board components
-│   ├── chat/                # Chat components
-│   ├── files/               # File management
-│   ├── layout/              # Layout components
-│   ├── notifications/       # Notification system
-│   └── project/             # Project components
-├── lib/
-│   ├── auth.ts              # NextAuth configuration
-│   ├── prisma.ts            # Prisma client
-│   ├── r2.ts                # R2 storage client
-│   └── socket-client.ts     # Socket.io client
-├── prisma/
-│   ├── schema.prisma        # Database schema
-│   └── seed.ts              # Database seeding
-├── server.ts                # Custom Socket.io server
-└── middleware.ts            # Next.js middleware
-```
+- Authenticate Socket.IO connections and authorize room joins and events against actual workspace/project membership.
+- Restrict allowed Socket.IO origins and validate incoming event payloads.
+- Verify auth/session and authorization checks on every API route.
+- Use migrations/backups and separate dev/prod databases; do **not** run demo seed in production.
+- Test complete user flows, real-time behavior, deployment configuration and error handling.
 
-## 🚀 Deployment
+## Repository ownership
 
-### Deploy to Render
-
-This project includes a `render.yaml` configuration for easy deployment to Render.
-
-1. Push your code to GitHub
-2. Connect your repository to Render
-3. Render will automatically detect the configuration
-4. Set up your environment variables
-5. Deploy!
-
-### Environment Variables for Production
-
-Make sure to set all required environment variables in your hosting platform:
-
-- `DATABASE_URL` - PostgreSQL connection string
-- `NEXTAUTH_URL` - Your production URL
-- `NEXTAUTH_SECRET` - Strong random secret
-- `R2_*` - Cloudflare R2 credentials
-- `NEXT_PUBLIC_SOCKET_URL` - Your production URL
-
-## 📝 Default Users (Seed Data)
-
-After running `npx prisma db seed`, you can log in with:
-
-**Email:** samuelhany500@gmail.com  
-**Password:** password123
-
-**Email:** sarah@example.com  
-**Password:** password123
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 👨‍💻 Author
-
-**Samuel Ehab**
-
-- Email: samuelhany500@gmail.com
-- GitHub: [@yourusername](https://github.com/yourusername)
-
-## 🙏 Acknowledgments
-
-- Next.js team for the amazing framework
-- Prisma team for the excellent ORM
-- Socket.io for real-time capabilities
-- All contributors and users of this project
-
----
-
-**Built with ❤️ using Next.js**
+This is a portfolio project. For backend-oriented hiring reviews, start with [the schema](prisma/schema.prisma), [API routes](app/api), and [the real-time server](server.ts), including its current limitations.
