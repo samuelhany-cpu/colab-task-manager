@@ -10,7 +10,8 @@
     "lint": "eslint",
     "prepare": "husky",
     "postinstall": "prisma generate",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:seed:demo": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.968.0",
